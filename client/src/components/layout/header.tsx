@@ -1,39 +1,20 @@
+'use client';
+
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Layers, Sun, Moon, LogOut, User as UserIcon, Plus, Menu, X, Settings } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
+import { menuVariants, SPRING_BOUNCY, EASE_OUT_EXPO } from '@/lib/animations';
+import { useTheme } from '@/components/theme-provider';
 
 export function Header() {
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuthStore();
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const { resolvedTheme, toggleTheme } = useTheme();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    // Check initial theme from document class or localStorage
-    const savedTheme = localStorage.getItem('dte_theme') as 'light' | 'dark' | null;
-    const isDark = savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    const initialTheme = isDark ? 'dark' : 'light';
-    setTheme(initialTheme);
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, []);
-
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    localStorage.setItem('dte_theme', nextTheme);
-    if (nextTheme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  };
 
   const navLinks = [
     { href: '/', label: 'Projects' },
@@ -42,14 +23,24 @@ export function Header() {
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+    <motion.header
+      initial={{ y: -64, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.6, ease: EASE_OUT_EXPO }}
+      className="sticky top-0 z-40 w-full border-b border-border bg-card/80 backdrop-blur supports-[backdrop-filter]:bg-card/60"
+    >
       <div className="flex h-16 items-center justify-between px-4 sm:px-8 max-w-7xl mx-auto">
         {/* Brand */}
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2.5 font-bold text-lg text-foreground transition-opacity hover:opacity-90">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-primary to-accent shadow-md shadow-primary/25 text-white">
+            <motion.div
+              whileHover={{ rotate: 12, scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              transition={SPRING_BOUNCY}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-primary to-accent shadow-md shadow-primary/25 text-white"
+            >
               <Layers className="h-5 w-5" />
-            </div>
+            </motion.div>
             <span className="tracking-tight">
               Design<span className="text-primary font-black">2</span>Elementor
             </span>
@@ -63,13 +54,20 @@ export function Header() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                  className={`relative px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
                     isActive
-                      ? 'bg-secondary text-foreground font-semibold'
+                      ? 'text-foreground font-semibold'
                       : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
                   }`}
                 >
-                  {link.label}
+                  {isActive && (
+                    <motion.span
+                      layoutId="nav-active"
+                      className="absolute inset-0 rounded-lg bg-secondary"
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{link.label}</span>
                 </Link>
               );
             })}
@@ -85,15 +83,32 @@ export function Header() {
           </Link>
 
           {/* Dark/Light mode toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleTheme}
-            aria-label="Toggle theme"
-            className="rounded-lg text-muted-foreground hover:text-foreground"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
+          <motion.div whileHover={{ rotate: 20, scale: 1.1 }} whileTap={{ scale: 0.85 }} transition={SPRING_BOUNCY}>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              className="rounded-lg text-muted-foreground hover:text-foreground"
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span
+                  key={resolvedTheme}
+                  initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+                  animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                  exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+                  transition={{ duration: 0.25 }}
+                  className="flex items-center justify-center"
+                >
+                  {resolvedTheme === 'dark' ? (
+                    <Sun className="h-4 w-4 text-amber-400" />
+                  ) : (
+                    <Moon className="h-4 w-4 text-indigo-600" />
+                  )}
+                </motion.span>
+              </AnimatePresence>
+            </Button>
+          </motion.div>
 
           {/* User auth state */}
           {isAuthenticated && user ? (
@@ -146,29 +161,43 @@ export function Header() {
       </div>
 
       {/* Mobile menu dropdown */}
-      {mobileMenuOpen && (
-        <div className="md:hidden border-b border-border bg-card px-4 pt-2 pb-4 space-y-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              className="block px-3 py-2 rounded-md text-base font-medium text-muted-foreground hover:text-foreground hover:bg-secondary"
-            >
-              {link.label}
-            </Link>
-          ))}
-          <div className="pt-2 border-t border-border mt-2">
-            <Link
-              href="/upload"
-              onClick={() => setMobileMenuOpen(false)}
-              className="block w-full text-center py-2 text-sm font-semibold text-primary"
-            >
-              + Start New Conversion
-            </Link>
-          </div>
-        </div>
-      )}
-    </header>
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            variants={menuVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="md:hidden border-b border-border bg-card px-4 pt-2 pb-4 space-y-1 overflow-hidden"
+          >
+            {navLinks.map((link, i) => (
+              <motion.div
+                key={link.href}
+                initial={{ opacity: 0, x: -16 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.05 * i, duration: 0.3, ease: EASE_OUT_EXPO }}
+              >
+                <Link
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-3 py-2 rounded-md text-base font-medium text-muted-foreground hover:text-foreground hover:bg-secondary"
+                >
+                  {link.label}
+                </Link>
+              </motion.div>
+            ))}
+            <div className="pt-2 border-t border-border mt-2">
+              <Link
+                href="/upload"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block w-full text-center py-2 text-sm font-semibold text-primary"
+              >
+                + Start New Conversion
+              </Link>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.header>
   );
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { 
   CheckCircle2, 
   CircleDashed, 
@@ -15,6 +16,7 @@ import {
 import { StageName, StageStatus, JobStage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { EASE_OUT_EXPO } from '@/lib/animations';
 
 interface StageProgressProps {
   currentStage?: StageName | null;
@@ -131,7 +133,12 @@ export function StageProgress({
     <div className="space-y-6">
       {/* Overall Status Banner if failed */}
       {overallStatus === 'failed' && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-destructive space-y-2">
+        <motion.div
+          initial={{ opacity: 0, y: -8, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.4, ease: EASE_OUT_EXPO }}
+          className="rounded-xl border border-destructive/30 bg-destructive/10 p-4 text-destructive space-y-2"
+        >
           <div className="flex items-center gap-2 font-semibold text-sm">
             <AlertCircle className="h-5 w-5 shrink-0" />
             <span>Conversion Pipeline Encountered An Error</span>
@@ -157,7 +164,7 @@ export function StageProgress({
               </button>
             </div>
           )}
-        </div>
+        </motion.div>
       )}
 
       {/* Stage Flow */}
@@ -168,15 +175,31 @@ export function StageProgress({
           const StepIcon = step.icon;
 
           return (
-            <div key={step.key} className="relative group">
+            <motion.div
+              key={step.key}
+              initial={{ opacity: 0, x: -24 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: idx * 0.06, duration: 0.5, ease: EASE_OUT_EXPO }}
+              className="relative group"
+            >
               {/* Node Icon on Timeline */}
-              <div
+              <motion.div
+                animate={
+                  status === 'processing'
+                    ? { scale: [1, 1.15, 1] }
+                    : { scale: 1 }
+                }
+                transition={
+                  status === 'processing'
+                    ? { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
+                    : { duration: 0.3 }
+                }
                 className={cn(
                   'absolute -left-[37px] top-0.5 flex h-7 w-7 items-center justify-center rounded-full border text-xs transition-all',
                   status === 'completed' &&
                     'border-emerald-500 bg-emerald-500 text-white shadow-sm shadow-emerald-500/20',
                   status === 'processing' &&
-                    'border-primary bg-primary/20 text-primary animate-pulse shadow-md shadow-primary/30',
+                    'border-primary bg-primary/20 text-primary shadow-md shadow-primary/30',
                   status === 'failed' &&
                     'border-destructive bg-destructive text-white',
                   status === 'pending' &&
@@ -192,12 +215,14 @@ export function StageProgress({
                 ) : (
                   <StepIcon className="h-3.5 w-3.5" />
                 )}
-              </div>
+              </motion.div>
 
               {/* Step Content */}
-              <div
+              <motion.div
+                whileHover={{ x: 4 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                 className={cn(
-                  'rounded-xl border p-4 transition-all',
+                  'rounded-xl border p-4 transition-colors',
                   status === 'processing'
                     ? 'border-primary/50 bg-primary/5 shadow-sm'
                     : 'border-border/60 bg-card/60'
@@ -246,8 +271,8 @@ export function StageProgress({
                     {recorded.errorMessage}
                   </div>
                 )}
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           );
         })}
       </div>

@@ -4,19 +4,35 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useDropzone } from 'react-dropzone';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Header } from '../../components/layout/header';
 import { Button } from '../../components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
+import { Badge } from '../../components/ui/badge';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../store/auth';
 import toast from 'react-hot-toast';
-import { UploadCloud, FileImage, CheckCircle, Zap, LogIn } from 'lucide-react';
+import {
+  UploadCloud,
+  FileImage,
+  CheckCircle,
+  Zap,
+  LogIn,
+  Layers,
+  ArrowLeft,
+  Sparkles,
+  Info,
+  Maximize2,
+  Trash2,
+} from 'lucide-react';
+import { staggerContainer, staggerItem, EASE_OUT_EXPO } from '../../lib/animations';
 
 export default function UploadPage() {
   const router = useRouter();
   const { isAuthenticated, setAuth } = useAuthStore();
   const [projectName, setProjectName] = useState('');
+  const [description, setDescription] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,6 +42,7 @@ export default function UploadPage() {
     accept: {
       'image/png': ['.png'],
       'image/jpeg': ['.jpg', '.jpeg'],
+      'image/webp': ['.webp'],
     },
     maxFiles: 1,
     onDrop: (acceptedFiles) => {
@@ -34,7 +51,11 @@ export default function UploadPage() {
         setSelectedFile(file);
         setPreviewUrl(URL.createObjectURL(file));
         if (!projectName) {
-          setProjectName(file.name.replace(/\.[^/.]+$/, ''));
+          const autoName = file.name
+            .replace(/\.[^/.]+$/, '')
+            .replace(/[-_]/g, ' ')
+            .replace(/\b\w/g, (c) => c.toUpperCase());
+          setProjectName(autoName);
         }
       }
     },
@@ -64,11 +85,11 @@ export default function UploadPage() {
       return;
     }
 
-    // If user is not yet logged in, auto-login with dev user to avoid 401
+    // Auto-login with dev user if guest
     const storedToken = typeof window !== 'undefined' ? localStorage.getItem('dte_token') : null;
     if (!storedToken) {
       try {
-        toast('Logging in as dev user before upload...', { icon: '🔑' });
+        toast('Signing in automatically as dev user...', { icon: '🔑' });
         const res = await api.auth.quickLogin();
         setAuth(res.user, res.token);
       } catch {
@@ -80,7 +101,7 @@ export default function UploadPage() {
     setIsSubmitting(true);
     try {
       await api.upload.uploadImage(selectedFile, projectName);
-      toast.success('Design uploaded successfully! Pipeline queued.');
+      toast.success('Design uploaded successfully! Conversion pipeline queued.');
       router.push('/');
     } catch (err: any) {
       toast.error(err.response?.data?.error?.message || err.message || 'Upload failed');
@@ -89,119 +110,213 @@ export default function UploadPage() {
     }
   };
 
+  const handleClearImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedFile(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+  };
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       <Header />
-      <main className="flex-1 max-w-4xl w-full mx-auto p-6 md:p-8 space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Upload Webpage Design</h1>
-          <p className="text-slate-400 mt-1">
-            Accepts PNG, JPG, or full-page tall screenshots. Automatically validates, tiles, and parses layout structure.
-          </p>
-        </div>
-
-        {!isAuthenticated && (
-          <Card className="border border-blue-500/30 bg-blue-950/20 p-4">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-blue-400">Authentication Required for Upload</p>
-                <p className="text-xs text-slate-400">You must be logged in to store assets and run conversions.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={handleQuickDevLogin}
-                  isLoading={quickLoginLoading}
-                  className="bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-1.5"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  1-Click Dev Login
-                </Button>
-                <Link href="/auth/login">
-                  <Button size="sm" variant="outline" className="flex items-center gap-1.5">
-                    <LogIn className="w-3.5 h-3.5" />
-                    Sign In
-                  </Button>
-                </Link>
-              </div>
+      <motion.main
+        variants={staggerContainer}
+        initial="hidden"
+        animate="visible"
+        className="flex-1 max-w-4xl w-full mx-auto p-4 sm:p-6 md:p-8 space-y-6"
+      >
+        {/* Navigation Breadcrumb */}
+        <motion.div variants={staggerItem}>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Dashboard
+          </Link>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+                New Design Conversion
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Upload your screenshot or mockup. We will parse the layout, extract styles, and compile a native Elementor JSON template.
+              </p>
             </div>
-          </Card>
-        )}
+            <Badge variant="info" className="self-start sm:self-auto font-mono text-[11px]">
+              Flexbox Container v3
+            </Badge>
+          </div>
+        </motion.div>
 
-        <form onSubmit={handleUpload} className="space-y-6">
-          <Card className="bg-slate-900/50">
-            <CardHeader>
-              <CardTitle className="text-lg">Project Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Input
-                label="Project Name"
-                placeholder="e.g. SaaS Landing Page V2"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                required
-              />
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-900/50">
-            <CardHeader>
-              <CardTitle className="text-lg">Design Screenshot</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
-                  isDragActive
-                    ? 'border-blue-500 bg-blue-500/10'
-                    : selectedFile
-                    ? 'border-green-500/50 bg-green-500/5'
-                    : 'border-slate-800 hover:border-slate-700 bg-slate-950/40'
-                }`}
-              >
-                <input {...getInputProps()} />
-                <div className="flex flex-col items-center justify-center space-y-3">
-                  {selectedFile ? (
-                    <>
-                      <CheckCircle className="w-10 h-10 text-green-500" />
-                      <div className="text-sm font-medium text-slate-200">
-                        {selectedFile.name} ({(selectedFile.size / (1024 * 1024)).toFixed(2)} MB)
-                      </div>
-                      <p className="text-xs text-slate-400">Click or drag another image to replace</p>
-                    </>
-                  ) : (
-                    <>
-                      <UploadCloud className="w-10 h-10 text-slate-500" />
-                      <div className="text-sm font-medium text-slate-200">
-                        Drag and drop your screenshot here, or click to browse
-                      </div>
-                      <p className="text-xs text-slate-400">Supports PNG, JPG, JPEG up to 500MB</p>
-                    </>
-                  )}
+        {/* Guest prompt banner */}
+        <motion.div variants={staggerItem}>
+          {!isAuthenticated && (
+            <Card className="border border-primary/30 bg-primary/5 p-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <Info className="w-4 h-4 text-primary" /> Guest Mode Notice
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    You can upload immediately; clicking submit will automatically register a local developer session.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleQuickDevLogin}
+                    isLoading={quickLoginLoading}
+                    className="flex items-center gap-1.5"
+                    leftIcon={<Zap className="w-3.5 h-3.5" />}
+                  >
+                    1-Click Sign-In
+                  </Button>
                 </div>
               </div>
+            </Card>
+          )}
+        </motion.div>
 
-              {previewUrl && (
-                <div className="mt-6 border border-slate-800 rounded-xl overflow-hidden bg-slate-950">
-                  <div className="p-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <FileImage className="w-3.5 h-3.5 text-blue-400" /> Image Preview
-                    </span>
-                    <span>Scroll to preview tall designs</span>
-                  </div>
-                  <div className="max-h-96 overflow-y-auto p-4 flex justify-center">
-                    <img
-                      src={previewUrl}
-                      alt="Screenshot preview"
-                      className="max-w-full h-auto rounded shadow-lg"
-                    />
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Upload & Form Section */}
+        <form onSubmit={handleUpload} className="space-y-6">
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <FileImage className="w-5 h-5 text-primary" /> 1. Upload Design Screenshot
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <motion.div
+                  {...(getRootProps() as Record<string, unknown>)}
+                  animate={isDragActive ? { scale: 1.01 } : { scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+                  className={`border-2 border-dashed rounded-xl p-6 sm:p-8 text-center cursor-pointer transition-all ${
+                    isDragActive
+                      ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10'
+                      : selectedFile
+                      ? 'border-emerald-500/50 bg-emerald-500/5'
+                      : 'border-border hover:border-primary/50 bg-secondary/30 hover:bg-secondary/50'
+                  }`}
+                >
+                  <input {...getInputProps()} />
+                  <div className="flex flex-col items-center justify-center space-y-3">
+                    <AnimatePresence mode="wait">
+                      {selectedFile ? (
+                        <motion.div
+                          key="file"
+                          initial={{ opacity: 0, scale: 0.6 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.6 }}
+                          className="h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500"
+                        >
+                          <CheckCircle className="w-7 h-7" />
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          key="upload"
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: isDragActive ? -6 : 0 }}
+                          exit={{ opacity: 0, scale: 0.7 }}
+                          className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${
+                            isDragActive ? 'bg-primary/20 text-primary' : 'bg-secondary text-muted-foreground'
+                          }`}
+                        >
+                          <UploadCloud className="w-6 h-6" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
-          <div className="flex items-center justify-end gap-4">
+                    {selectedFile ? (
+                      <div className="space-y-1 text-center">
+                        <div className="text-sm font-semibold text-foreground flex items-center justify-center gap-2">
+                          <span>{selectedFile.name}</span>
+                          <Badge variant="neutral" className="text-[10px] font-mono">
+                            {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Drop another image or click to replace
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleClearImage}
+                          className="text-xs text-rose-500 hover:text-rose-600 inline-flex items-center gap-1 font-medium mt-1"
+                        >
+                          <Trash2 className="w-3 h-3" /> Remove image
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 text-center">
+                        <div className="text-sm font-semibold text-foreground">
+                          {isDragActive ? 'Release to drop screenshot here' : 'Drop your mockup here, or browse files'}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Supports PNG, JPG, JPEG, or WebP (Full-height landing pages supported up to 500MB)
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+
+                {/* Preview Box */}
+                <AnimatePresence>
+                  {previewUrl && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.35, ease: EASE_OUT_EXPO }}
+                      className="rounded-xl border border-border overflow-hidden bg-secondary/40"
+                    >
+                      <div className="px-4 py-2.5 bg-secondary/80 border-b border-border flex items-center justify-between text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5 font-medium text-foreground">
+                          <Maximize2 className="w-3.5 h-3.5 text-primary" /> Visual Inspection Preview
+                        </span>
+                        <span>Scrollable tall container</span>
+                      </div>
+                      <div className="max-h-80 overflow-y-auto p-4 flex justify-center bg-card">
+                        <img
+                          src={previewUrl}
+                          alt="Screenshot preview"
+                          className="max-w-full h-auto rounded-lg shadow-md border border-border object-contain"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          <motion.div variants={staggerItem}>
+            <Card className="bg-card border-border">
+              <CardHeader>
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-primary" /> 2. Project Specification
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Input
+                  label="Project Title"
+                  placeholder="e.g. Modern SaaS Landing Page"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Description (Optional)"
+                  placeholder="e.g. Hero section + 3-feature grid with responsive tablet/mobile overrides"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Action buttons */}
+          <motion.div variants={staggerItem} className="flex items-center justify-end gap-3 pt-2">
             <Button
               type="button"
               variant="outline"
@@ -210,12 +325,18 @@ export default function UploadPage() {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting || !selectedFile}>
-              {isSubmitting ? 'Uploading & Processing...' : 'Start Conversion Pipeline'}
+            <Button
+              type="submit"
+              disabled={isSubmitting || !selectedFile}
+              isLoading={isSubmitting}
+              className="shadow-lg shadow-primary/20"
+              leftIcon={<Sparkles className="w-4 h-4" />}
+            >
+              {isSubmitting ? 'Processing Pipeline...' : 'Start Conversion Pipeline'}
             </Button>
-          </div>
+          </motion.div>
         </form>
-      </main>
+      </motion.main>
     </div>
   );
 }

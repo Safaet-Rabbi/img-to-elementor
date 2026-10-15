@@ -1,17 +1,30 @@
-import React, { HTMLAttributes } from 'react';
-import { cn } from '@/lib/utils';
+'use client';
 
-export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return (
-    <div
+import React, { HTMLAttributes, forwardRef } from 'react';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import { EASE_OUT_EXPO } from '@/lib/animations';
+
+/**
+ * Animated Card — gentle entrance + 3D lift on hover.
+ */
+export const Card = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: EASE_OUT_EXPO }}
+      whileHover={{ y: -4 }}
       className={cn(
-        'rounded-xl border border-border bg-card text-card-foreground shadow-sm transition-all',
+        'rounded-xl border border-border bg-card text-card-foreground shadow-sm transition-colors',
         className
       )}
-      {...props}
+      {...(props as React.ComponentProps<typeof motion.div>)}
     />
-  );
-}
+  )
+);
+Card.displayName = 'Card';
 
 export function CardHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />;

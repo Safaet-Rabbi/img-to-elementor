@@ -124,6 +124,103 @@ const publishSchema = z.object({
   }),
 });
 
+const directPublishSchema = z.object({
+  projectId: z.string().optional(),
+  jobId: z.string().optional(),
+  siteConfigId: z.string().optional(),
+  siteConnectionId: z.string().optional(),
+  resourceType: z.enum(['page', 'template']).default('page'),
+  title: z.string().min(1),
+  publishMode: z.enum(['draft', 'publish']).optional(),
+  mode: z.enum(['draft', 'publish']).optional(),
+  confirmPublish: z.boolean().optional(),
+});
+
+// Root endpoint for direct /publish
+publishRouter.post('/', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = (req as any).user.userId;
+    const parsed = directPublishSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new ValidationError('Invalid publish request', parsed.error.format());
+    }
+
+    const { projectId, jobId, siteConfigId, siteConnectionId, resourceType, title } = parsed.data;
+    const effectiveSiteId = siteConfigId || siteConnectionId;
+    if (!effectiveSiteId) {
+      throw new ValidationError('Target site connection ID is required');
+    }
+
+    const publishMode = parsed.data.publishMode || parsed.data.mode || 'draft';
+
+    let job: any = null;
+    if (jobId) {
+      job = await prisma.conversionJob.findFirst({
+        where: { id: jobId, project: { userId } },
+        include: { project: true },
+      });
+    } else if (projectId) {
+      job = await prisma.conversionJob.findFirst({
+        where: { projectId, project: { userId } },
+        orderBy: { createdAt: 'desc' },
+        include: { project: true },
+      });
+    }
+
+    if (!job) {
+      throw new NotFoundError('Conversion job not found for publication');
+    }
+
+    const site = await prisma.siteConnection.findFirst({
+      where: { id: effectiveSiteId, userId },
+    });
+    if (!site) throw new NotFoundError('Connected site not found');
+
+    const elementorDoc = job.elementorArtifact;
+    if (!elementorDoc) {
+      throw new ValidationError('Elementor document is not ready to publish');
+    }
+
+    const creds = JSON.parse(decrypt(site.encryptedCredentials));
+    const publisher = new MCPPublisher({
+      siteUrl: site.siteUrl,
+      credentials: creds,
+    });
+
+    const idempotencyKey = `pub_${job.id}_${Date.now()}`;
+    const result = await publisher.publish({
+      elementorJson: elementorDoc,
+      title,
+      resourceType,
+      publishMode,
+      siteConfigId: site.id,
+      idempotencyKey,
+    });
+
+    if (result.success) {
+      await prisma.conversionJob.update({
+        where: { id: job.id },
+        data: {
+          status: 'published',
+          stages: {
+            create: {
+              stage: 'publishing',
+              status: 'completed',
+              attempt: 1,
+              outputPayload: result as any,
+              completedAt: new Date(),
+            },
+          },
+        },
+      }).catch(() => {});
+    }
+
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
 publishRouter.post('/:jobId/publish', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as any).user.userId;

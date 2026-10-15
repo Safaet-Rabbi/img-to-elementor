@@ -1,5 +1,9 @@
+'use client';
+
 import React, { createContext, useContext, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { SPRING_SOFT } from '@/lib/animations';
 
 interface TabsContextType {
   activeTab: string;
@@ -75,14 +79,21 @@ export function TabsTrigger({ value, children, className, disabled }: TabsTrigge
       disabled={disabled}
       onClick={() => context.setActiveTab(value)}
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 select-none',
+        'relative inline-flex items-center justify-center whitespace-nowrap rounded-lg px-3.5 py-1.5 text-xs sm:text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 select-none',
         isActive
-          ? 'bg-card text-foreground shadow-sm font-semibold'
+          ? 'text-foreground font-semibold'
           : 'text-muted-foreground hover:text-foreground hover:bg-card/50',
         className
       )}
     >
-      {children}
+      {isActive && (
+        <motion.span
+          layoutId="tabs-indicator"
+          className="absolute inset-0 rounded-lg bg-card shadow-sm"
+          transition={SPRING_SOFT}
+        />
+      )}
+      <span className="relative z-10 inline-flex items-center gap-1.5">{children}</span>
     </button>
   );
 }
@@ -102,11 +113,14 @@ export function TabsContent({
   if (context.activeTab !== value) return null;
 
   return (
-    <div
+    <motion.div
       role="tabpanel"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       className={cn('mt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary', className)}
     >
       {children}
-    </div>
+    </motion.div>
   );
 }
