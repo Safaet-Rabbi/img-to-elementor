@@ -10,6 +10,7 @@ import { encrypt, decrypt } from '../modules/security/encryption.js';
 import { MCPClient } from '../modules/mcp/client.js';
 import { MCPPublisher } from '../modules/mcp/publisher.js';
 import { NotFoundError, ValidationError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 
 export const sitesRouter = Router();
 sitesRouter.use(requireAuth);
@@ -229,6 +230,12 @@ publishRouter.post('/', async (req: Request, res: Response, next: NextFunction) 
     });
 
     if (result.success) {
+      const existingStage = await prisma.jobStage.findFirst({
+        where: { jobId: job.id, stage: 'publishing' },
+        orderBy: { attempt: 'desc' },
+      });
+      const nextAttempt = (existingStage?.attempt || 0) + 1;
+
       await prisma.conversionJob.update({
         where: { id: job.id },
         data: {
@@ -237,13 +244,15 @@ publishRouter.post('/', async (req: Request, res: Response, next: NextFunction) 
             create: {
               stage: 'publishing',
               status: 'completed',
-              attempt: 1,
+              attempt: nextAttempt,
               outputPayload: result as any,
               completedAt: new Date(),
             },
           },
         },
-      }).catch(() => {});
+      }).catch((err) => {
+        logger.warn({ err: err?.message }, 'Failed to record publish stage to conversionJob');
+      });
     }
 
     res.json({ success: true, data: result });
@@ -295,6 +304,32 @@ publishRouter.post('/:jobId/publish', async (req: Request, res: Response, next: 
       siteConfigId: site.id,
       idempotencyKey,
     });
+
+    if (result.success) {
+      const existingStage = await prisma.jobStage.findFirst({
+        where: { jobId: job.id, stage: 'publishing' },
+        orderBy: { attempt: 'desc' },
+      });
+      const nextAttempt = (existingStage?.attempt || 0) + 1;
+
+      await prisma.conversionJob.update({
+        where: { id: job.id },
+        data: {
+          status: 'published',
+          stages: {
+            create: {
+              stage: 'publishing',
+              status: 'completed',
+              attempt: nextAttempt,
+              outputPayload: result as any,
+              completedAt: new Date(),
+            },
+          },
+        },
+      }).catch((err) => {
+        logger.warn({ err: err?.message }, 'Failed to record publish stage to conversionJob');
+      });
+    }
 
     res.json({ success: true, data: result });
   } catch (err) {
