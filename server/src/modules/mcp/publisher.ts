@@ -59,8 +59,16 @@ export class MCPPublisher {
           if (cfg?.credentials?.username && cfg?.credentials?.applicationPassword) {
             const wpRes = await this.publishViaWordPressRestApi(cfg, req, elements);
             if (wpRes) {
-              remoteId = wpRes.id;
-              remoteUrl = wpRes.url;
+              return {
+                success: true,
+                remoteId: String(wpRes.id),
+                remoteUrl: normalizeUrl(wpRes.url, wpRes.id),
+                resourceType: req.resourceType,
+                status: req.publishMode,
+                verified: true,
+                durationMs: Date.now() - startTime,
+                idempotencyKey: req.idempotencyKey,
+              };
             }
           }
         } catch (wpErr: any) {
