@@ -336,13 +336,22 @@ export const api = {
     create: async (data: {
       siteUrl: string;
       name?: string;
-      credentials: {
+      username?: string;
+      applicationPassword?: string;
+      credentials?: {
         applicationPassword?: string;
         username?: string;
         apiKey?: string;
       };
     }): Promise<SiteConnection> => {
-      const res = await apiClient.post<ApiResponse<SiteConnection>>('/sites', data);
+      const payload = {
+        name: data.name,
+        siteUrl: data.siteUrl,
+        username: data.username || data.credentials?.username,
+        applicationPassword: data.applicationPassword || data.credentials?.applicationPassword,
+        credentials: data.credentials,
+      };
+      const res = await apiClient.post<ApiResponse<SiteConnection>>('/sites', payload);
       return res.data.data;
     },
     delete: async (id: string): Promise<{ success: boolean }> => {

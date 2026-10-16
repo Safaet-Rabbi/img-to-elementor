@@ -53,11 +53,13 @@ export default function SettingsPage() {
     e.preventDefault();
     try {
       await api.sites.create({
-        name: newSiteName,
-        siteUrl: newSiteUrl,
+        name: newSiteName.trim() || undefined,
+        siteUrl: newSiteUrl.trim(),
+        username: newUsername.trim(),
+        applicationPassword: newPassword.trim(),
         credentials: {
-          username: newUsername,
-          applicationPassword: newPassword,
+          username: newUsername.trim(),
+          applicationPassword: newPassword.trim(),
         },
       });
       toast.success('WordPress connection saved with encrypted credentials');
@@ -66,8 +68,8 @@ export default function SettingsPage() {
       setNewUsername('');
       setNewPassword('');
       fetchSites();
-    } catch {
-      toast.error('Failed to register site connection');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || err.message || 'Failed to register site connection');
     }
   };
 
@@ -254,11 +256,10 @@ export default function SettingsPage() {
                 <h4 className="text-sm font-semibold text-foreground">Connect New WordPress Site</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
-                    label="Site Label"
-                    placeholder="e.g. Staging Server"
+                    label="Site Label (Optional)"
+                    placeholder="e.g. My First WP"
                     value={newSiteName}
                     onChange={(e) => setNewSiteName(e.target.value)}
-                    required
                   />
                   <Input
                     label="WordPress Site URL"

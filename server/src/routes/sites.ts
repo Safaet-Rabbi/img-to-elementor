@@ -15,10 +15,18 @@ export const sitesRouter = Router();
 sitesRouter.use(requireAuth);
 
 const siteCreateSchema = z.object({
-  name: z.string().min(1),
-  siteUrl: z.string().url(),
-  username: z.string().min(1),
-  applicationPassword: z.string().min(1),
+  name: z.string().optional(),
+  siteLabel: z.string().optional(),
+  siteUrl: z.string().min(1),
+  username: z.string().optional(),
+  applicationPassword: z.string().optional(),
+  credentials: z
+    .object({
+      username: z.string().optional(),
+      applicationPassword: z.string().optional(),
+      apiKey: z.string().optional(),
+    })
+    .optional(),
 });
 
 sitesRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -52,7 +60,30 @@ sitesRouter.post('/', async (req: Request, res: Response, next: NextFunction) =>
       throw new ValidationError('Invalid site parameters', parsed.error.format());
     }
 
-    const { name, siteUrl, username, applicationPassword } = parsed.data;
+    const username = (parsed.data.username || parsed.data.credentials?.username || '').trim();
+    const applicationPassword = (parsed.data.applicationPassword || parsed.data.credentials?.applicationPassword || '').trim();
+
+    if (!username) {
+      throw new ValidationError('Username is required', { username: { _errors: ['Username is required'] } });
+    }
+    if (!applicationPassword) {
+      throw new ValidationError('Application Password is required', { applicationPassword: { _errors: ['Application Password is required'] } });
+    }
+
+    let siteUrl = parsed.data.siteUrl.trim();
+    if (!/^https?:\/\//i.test(siteUrl)) {
+      siteUrl = `http://${siteUrl}`;
+    }
+
+    let defaultName = 'WordPress Site';
+    try {
+      const urlObj = new URL(siteUrl);
+      defaultName = urlObj.hostname || defaultName;
+    } catch {
+      // Keep defaultName fallback
+    }
+
+    const name = (parsed.data.name || parsed.data.siteLabel || '').trim() || defaultName;
     const encryptedCredentials = encrypt(JSON.stringify({ username, applicationPassword }));
 
     const site = await prisma.siteConnection.create({
