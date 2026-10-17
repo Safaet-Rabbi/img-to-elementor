@@ -100,11 +100,19 @@ export default function PublishPage() {
         </Link>
 
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-            Publish to Elementor
-          </h1>
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+              Publish to WordPress Page
+            </h1>
+            <Badge variant="success" className="text-xs">
+              Elementor Canvas Page
+            </Badge>
+            <Badge variant="neutral" className="text-xs font-mono">
+              Elementor v3.24.7
+            </Badge>
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Directly push your compiled template to WordPress using verified Model Context Protocol (MCP) tools.
+            Directly push your compiled design to WordPress <strong>Pages &gt; All Pages</strong> (<code className="text-xs bg-muted px-1.5 py-0.5 rounded">post_type: &apos;page&apos;</code>) with full Elementor Canvas layout.
           </p>
         </div>
 
@@ -113,18 +121,26 @@ export default function PublishPage() {
             <div className="h-14 w-14 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 mx-auto">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h2 className="text-2xl font-bold text-foreground">Successfully Published!</h2>
+            <h2 className="text-2xl font-bold text-foreground">Successfully Published as WordPress Page!</h2>
             <p className="text-muted-foreground text-sm max-w-md mx-auto">
-              Your design has been compiled into native Elementor structures and registered on the target WordPress site.
+              Your design has been compiled into native Elementor Flexbox structures and registered under WordPress <strong>Pages &gt; All Pages</strong>.
             </p>
             <div className="bg-card border border-border rounded-xl p-4 max-w-sm mx-auto text-left text-xs space-y-2 font-mono">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Resource ID:</span>
+                <span className="text-muted-foreground">Page ID:</span>
                 <span className="text-foreground font-semibold">{publishResult.remoteId}</span>
               </div>
               <div className="flex justify-between">
+                <span className="text-muted-foreground">Resource Type:</span>
+                <span className="text-primary font-semibold">WordPress Page (wp-page)</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Page Layout:</span>
+                <span className="text-foreground font-semibold">Elementor Canvas</span>
+              </div>
+              <div className="flex justify-between">
                 <span className="text-muted-foreground">Status:</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{publishResult.status}</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold uppercase">{publishResult.status}</span>
               </div>
               {publishResult.remoteUrl && (
                 <div className="truncate pt-1 border-t border-border">

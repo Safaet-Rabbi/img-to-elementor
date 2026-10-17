@@ -45,6 +45,38 @@ export function ElementorInspector({ elementorData, className }: ElementorInspec
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNode, setSelectedNode] = useState<ElementNode | null>(null);
 
+  const rawJson = useMemo(() => JSON.stringify(elementorData || {}), [elementorData]);
+  const formattedJson = useMemo(() => JSON.stringify(elementorData || {}, null, 2), [elementorData]);
+  const activeJson = isMinified ? rawJson : formattedJson;
+
+  const content = useMemo(() => (elementorData?.content as ElementNode[]) || [], [elementorData]);
+
+  // Compute element stats
+  const { totalContainers, totalWidgets, maxDepth, widgetCounts } = useMemo(() => {
+    let containers = 0;
+    let widgets = 0;
+    let depth = 0;
+    const counts: Record<string, number> = {};
+
+    const traverse = (nodes: ElementNode[], currentDepth: number) => {
+      if (currentDepth > depth) depth = currentDepth;
+      nodes.forEach((n) => {
+        if (n.elType === 'container' || n.elType === 'section' || n.elType === 'column') {
+          containers++;
+        } else {
+          widgets++;
+          const wt = n.widgetType || 'unknown';
+          counts[wt] = (counts[wt] || 0) + 1;
+        }
+        if (n.elements && n.elements.length > 0) {
+          traverse(n.elements, currentDepth + 1);
+        }
+      });
+    };
+    traverse(content, 1);
+    return { totalContainers: containers, totalWidgets: widgets, maxDepth: depth, widgetCounts: counts };
+  }, [content]);
+
   if (!elementorData) {
     return (
       <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground bg-card">
@@ -53,10 +85,6 @@ export function ElementorInspector({ elementorData, className }: ElementorInspec
       </div>
     );
   }
-
-  const rawJson = useMemo(() => JSON.stringify(elementorData), [elementorData]);
-  const formattedJson = useMemo(() => JSON.stringify(elementorData, null, 2), [elementorData]);
-  const activeJson = isMinified ? rawJson : formattedJson;
 
   const rawSizeKb = (new TextEncoder().encode(rawJson).length / 1024).toFixed(1);
   const formattedSizeKb = (new TextEncoder().encode(formattedJson).length / 1024).toFixed(1);
@@ -90,35 +118,10 @@ export function ElementorInspector({ elementorData, className }: ElementorInspec
     setCollapsedElements((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const content = (elementorData.content as ElementNode[]) || [];
   const version = String(elementorData.version || '0.4');
-  const title = String(elementorData.title || 'Elementor Template');
-
-  // Compute element stats
-  const { totalContainers, totalWidgets, maxDepth, widgetCounts } = useMemo(() => {
-    let containers = 0;
-    let widgets = 0;
-    let depth = 0;
-    const counts: Record<string, number> = {};
-
-    const traverse = (nodes: ElementNode[], currentDepth: number) => {
-      if (currentDepth > depth) depth = currentDepth;
-      nodes.forEach((n) => {
-        if (n.elType === 'container' || n.elType === 'section' || n.elType === 'column') {
-          containers++;
-        } else {
-          widgets++;
-          const wt = n.widgetType || 'unknown';
-          counts[wt] = (counts[wt] || 0) + 1;
-        }
-        if (n.elements && n.elements.length > 0) {
-          traverse(n.elements, currentDepth + 1);
-        }
-      });
-    };
-    traverse(content, 1);
-    return { totalContainers: containers, totalWidgets: widgets, maxDepth: depth, widgetCounts: counts };
-  }, [content]);
+  const elementorVersion = String((elementorData as any).elementor_version || '3.24.7');
+  const templateType = String((elementorData as any).type || 'page');
+  const title = String(elementorData.title || 'Elementor Page');
 
   // Expand / Collapse all
   const handleToggleAll = (collapse: boolean) => {
@@ -233,10 +236,13 @@ export function ElementorInspector({ elementorData, className }: ElementorInspec
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
             <Layers className="h-4 w-4 text-primary" />
-            <span>Elementor Template Output</span>
+            <span>Elementor Canvas Page Structure</span>
           </div>
           <Badge variant="success" withDot>
-            Elementor v{version}
+            Elementor v{elementorVersion}
+          </Badge>
+          <Badge variant="neutral" className="text-[11px] font-mono capitalize">
+            Type: {templateType} (Canvas)
           </Badge>
           <span className="hidden sm:inline-block text-xs text-muted-foreground font-mono">
             {totalContainers} Containers • {totalWidgets} Widgets

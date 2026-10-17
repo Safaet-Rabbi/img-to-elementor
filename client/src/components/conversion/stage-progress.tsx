@@ -43,32 +43,32 @@ const PIPELINE_STEPS: StepConfig[] = [
   },
   {
     key: 'image_analysis',
-    label: 'Layout & Vision',
-    description: 'Section hierarchy, color schemes & typography analysis',
+    label: 'Stage A: Vision & Canvas Isolation',
+    description: 'Auto mockup cropping, canvas bounds & visual perception',
     icon: Sparkles,
   },
   {
     key: 'dir_generation',
-    label: 'DIR Generation',
-    description: 'Assembling canonical Design Intermediate Representation',
+    label: 'Stage B: Canonical DIR Schema',
+    description: 'Nested Flexbox tree, typography spans & pill forms',
     icon: Palette,
   },
   {
     key: 'dir_validation',
-    label: 'DIR Verification',
-    description: 'Deterministic contract check and schema conformance',
+    label: 'DIR Contract Verification',
+    description: 'Deterministic schema validation & bounded self-repair',
     icon: FileCheck,
   },
   {
     key: 'elementor_generation',
-    label: 'Elementor Mapping',
-    description: 'Skill profile-grounded native container/widget transform',
+    label: 'Stage C: Elementor AST Generator',
+    description: 'Modern Flexbox containers, 7-char IDs & direct hex colors',
     icon: CircleDashed,
   },
   {
     key: 'elementor_validation',
-    label: 'Widget Registry Check',
-    description: 'Validating control IDs, repeaters & output integrity',
+    label: 'Stage D: Self-Healing & Verification',
+    description: 'Widget restoration audit & 100% deployable schema gate',
     icon: FileCheck,
   },
   {
@@ -79,8 +79,8 @@ const PIPELINE_STEPS: StepConfig[] = [
   },
   {
     key: 'publishing',
-    label: 'WordPress MCP Publish',
-    description: 'Direct publishing via connected site Elementor MCP protocol',
+    label: 'WordPress Canvas Page Publish',
+    description: 'Direct publishing to WordPress Pages (post_type: page)',
     icon: Send,
   },
 ];

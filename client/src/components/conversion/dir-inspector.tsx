@@ -56,6 +56,10 @@ export function DIRInspector({ dirData, className }: DIRInspectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewportFilter, setViewportFilter] = useState<'all' | 'desktop' | 'tablet' | 'mobile'>('all');
 
+  const rawJson = useMemo(() => JSON.stringify(dirData || {}), [dirData]);
+  const formattedJson = useMemo(() => JSON.stringify(dirData || {}, null, 2), [dirData]);
+  const activeJson = isMinified ? rawJson : formattedJson;
+
   if (!dirData) {
     return (
       <div className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground bg-card">
@@ -64,10 +68,6 @@ export function DIRInspector({ dirData, className }: DIRInspectorProps) {
       </div>
     );
   }
-
-  const rawJson = useMemo(() => JSON.stringify(dirData), [dirData]);
-  const formattedJson = useMemo(() => JSON.stringify(dirData, null, 2), [dirData]);
-  const activeJson = isMinified ? rawJson : formattedJson;
 
   const handleCopy = async () => {
     try {

@@ -161,11 +161,11 @@ export default function ProjectDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => downloadJson(elementorData, `${project.name || 'project'}-elementor.json`)}
+                  onClick={() => downloadJson(elementorData, `${project.name || 'project'}-elementor-page.json`)}
                   className="flex items-center gap-1.5"
                   leftIcon={<Download className="w-3.5 h-3.5" />}
                 >
-                  Export JSON
+                  Export Page JSON
                 </Button>
                 <Link href={`/projects/${projectId}/publish`}>
                   <Button size="sm" className="flex items-center gap-1.5 shadow-md shadow-primary/20" leftIcon={<Send className="w-3.5 h-3.5" />}>
@@ -228,10 +228,10 @@ export default function ProjectDetailPage() {
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Layers className="w-4 h-4" /> Elementor Output & Structure
+            <Layers className="w-4 h-4" /> Elementor Canvas Page Structure
             {elementorData && (
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">
-                Verified
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full font-medium">
+                Page Ready
               </span>
             )}
           </button>
