@@ -332,10 +332,12 @@ export class ElementorGenerator {
           view: 'inline',
           icon_list: iconList,
           text_color: majorityColor,
-          space_between: { unit: 'px', size: node.gap || 32 },
+          space_between: { unit: 'px', size: Math.min(24, Math.max(12, node.gap || 20)) },
+          space_between_tablet: { unit: 'px', size: 14 },
+          space_between_mobile: { unit: 'px', size: 10 },
           typography_typography: 'custom',
           typography_font_size: { unit: 'px', size: node.children[0]?.styles?.fontSize || 14 },
-          typography_font_weight: '400',
+          typography_font_weight: '500',
         },
         elements: [],
       };
@@ -399,7 +401,11 @@ export class ElementorGenerator {
       const align = node.alignItems || (node.styles as any)?.alignItems;
       if (align && !isInlineForm) settings.flex_align_items = this.mapAlignItems(align);
       const wrap = node.wrap || (node.styles as any)?.flexWrap === 'wrap';
-      if (wrap) settings.flex_wrap = 'wrap';
+      if (wrap) {
+        settings.flex_wrap = 'wrap';
+      } else if ((node.styles as any)?.flexWrap === 'nowrap' || flexDir === 'row') {
+        settings.flex_wrap = 'nowrap';
+      }
       const gap = node.gap ?? (node.styles as any)?.gap;
       if (gap !== undefined) {
         settings.flex_gap = { unit: 'px', size: gap };
@@ -1036,6 +1042,9 @@ export class ElementorGenerator {
     const padding = node.styles?.padding || { top: 6, bottom: 6, left: 16, right: 16 };
     const borderRadius = node.styles?.borderRadius || 9999;
 
+    const rawText = node.text || '';
+    const estimatedPillWidth = Math.min(520, Math.max(160, Math.round(rawText.length * 8.5 + 48)));
+
     return {
       id: generateElementId(),
       elType: 'container',
@@ -1043,9 +1052,12 @@ export class ElementorGenerator {
         container_type: 'flex',
         flex_direction: 'row',
         content_width: 'boxed',
+        boxed_width: { unit: 'px', size: estimatedPillWidth, sizes: [] },
+        width: { unit: 'px', size: estimatedPillWidth },
         align_self: 'center',
         flex_align_items: 'center',
         flex_justify_content: 'center',
+        flex_wrap: 'nowrap',
         background_background: 'classic',
         background_color: bgColor,
         border_radius: this.mapBorderRadius(borderRadius),
@@ -1134,7 +1146,27 @@ export class ElementorGenerator {
   private applyStylesToSettings(styles: DIRStyles | undefined, settings: Record<string, any>, isContainer: boolean): void {
     if (!styles) return;
 
-    if (styles.backgroundColor) {
+    if (styles.backgroundGradient && isContainer) {
+      settings.background_background = 'gradient';
+      const grad = styles.backgroundGradient;
+      const hexMatches = grad.match(/#(?:[0-9a-fA-F]{3,8})/g);
+      const rgbaMatches = grad.match(/rgba?\([^)]+\)/g);
+      const allColors = [...(hexMatches || []), ...(rgbaMatches || [])];
+      if (allColors.length >= 2) {
+        settings.background_color = allColors[0];
+        settings.background_color_b = allColors[1];
+      } else if (allColors.length === 1) {
+        settings.background_color = allColors[0];
+        settings.background_color_b = styles.backgroundColor || '#000000';
+      }
+      if (grad.includes('radial')) {
+        settings.background_gradient_type = 'radial';
+        settings.background_gradient_position = 'bottom center';
+      } else {
+        settings.background_gradient_type = 'linear';
+        settings.background_gradient_angle = { unit: 'deg', size: 180 };
+      }
+    } else if (styles.backgroundColor) {
       if (isContainer) {
         settings.background_background = 'classic';
         settings.background_color = styles.backgroundColor;
@@ -1179,16 +1211,46 @@ export class ElementorGenerator {
       settings.box_shadow_box_shadow_type = 'yes';
     }
 
-    if (styles.width) {
+    if (styles.width !== undefined && styles.width !== null) {
       if (typeof styles.width === 'number') {
-        settings.width = { unit: 'px', size: styles.width };
-        if (styles.width > 360) {
-          settings.width_tablet = { unit: 'px', size: Math.min(680, styles.width) };
-          settings.width_mobile = { unit: '%', size: 100 };
-          this.inferredResponsiveCount++;
+        if (styles.width <= 100) {
+          if (styles.width === 100) settings.content_width = 'full';
+          settings.width = { unit: '%', size: styles.width };
+        } else {
+          settings.width = { unit: 'px', size: styles.width };
+          if (styles.width > 360) {
+            settings.width_tablet = { unit: 'px', size: Math.min(680, styles.width) };
+            settings.width_mobile = { unit: '%', size: 100 };
+            this.inferredResponsiveCount++;
+          }
         }
-      } else if (styles.width === '100%') {
-        settings.content_width = 'full';
+      } else if (typeof styles.width === 'string') {
+        const trimmed = styles.width.trim();
+        if (trimmed === '100%') {
+          settings.content_width = 'full';
+          settings.width = { unit: '%', size: 100 };
+        } else if (trimmed.endsWith('%')) {
+          const val = parseFloat(trimmed);
+          settings.width = { unit: '%', size: isNaN(val) ? 100 : val };
+        } else if (trimmed.endsWith('px')) {
+          const val = parseFloat(trimmed);
+          if (!isNaN(val)) {
+            settings.width = { unit: 'px', size: val };
+            if (val > 360) {
+              settings.width_tablet = { unit: 'px', size: Math.min(680, val) };
+              settings.width_mobile = { unit: '%', size: 100 };
+              this.inferredResponsiveCount++;
+            }
+          }
+        } else if (!isNaN(Number(trimmed))) {
+          const val = Number(trimmed);
+          if (val <= 100) {
+            if (val === 100) settings.content_width = 'full';
+            settings.width = { unit: '%', size: val };
+          } else {
+            settings.width = { unit: 'px', size: val };
+          }
+        }
       }
     }
 
