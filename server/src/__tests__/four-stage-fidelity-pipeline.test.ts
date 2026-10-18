@@ -215,7 +215,9 @@ describe('Four-Stage Fidelity Pipeline & Boss Feedback Specifications', () => {
         breakpoints: { desktop: { min: 1024 } },
         globals: {
           colors: { background: '#111827', text: '#ffffff', primary: '#3b82f6' },
+          typography: { fontFamilies: ['Inter'] },
         },
+        assets: [],
         pages: [
           {
             id: 'page_main',
@@ -266,7 +268,8 @@ describe('Four-Stage Fidelity Pipeline & Boss Feedback Specifications', () => {
           notes: [],
         },
         breakpoints: { desktop: { min: 1024 } },
-        globals: { colors: { background: '#000000', text: '#ffffff' } },
+        globals: { colors: { background: '#000000', text: '#ffffff' }, typography: { fontFamilies: ['Inter'] } },
+        assets: [],
         pages: [
           {
             id: 'page_main',
@@ -325,7 +328,7 @@ describe('Four-Stage Fidelity Pipeline & Boss Feedback Specifications', () => {
           notes: [],
         },
         breakpoints: { desktop: { min: 1024 } },
-        globals: {},
+        globals: { colors: { background: '#ffffff', text: '#000000' }, typography: { fontFamilies: ['Inter'] } },
         assets: [
           {
             id: 'blob_art',

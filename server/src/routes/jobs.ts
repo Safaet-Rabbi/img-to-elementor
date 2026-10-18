@@ -114,3 +114,54 @@ jobsRouter.post('/:id/retry', async (req: Request, res: Response, next: NextFunc
   }
 });
 
+jobsRouter.get('/:id/validation', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const userId = (req as any).user.userId;
+
+    const job = await prisma.conversionJob.findUnique({
+      where: { id },
+      include: { project: true },
+    });
+
+    if (!job || job.project.userId !== userId) {
+      throw new NotFoundError('Conversion job not found');
+    }
+
+    if (!job.previewArtifact) {
+      return res.json({ success: true, data: null, ready: false, message: 'Validation results not yet ready' });
+    }
+
+    res.json({ success: true, data: job.previewArtifact, ready: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+jobsRouter.get('/:id/package', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.params.id as string;
+    const userId = (req as any).user.userId;
+
+    const job = await prisma.conversionJob.findUnique({
+      where: { id },
+      include: { project: true },
+    });
+
+    if (!job || job.project.userId !== userId) {
+      throw new NotFoundError('Conversion job not found');
+    }
+
+    const preview = job.previewArtifact as any;
+    const zipPath = preview?.packageZipUrl;
+    if (!zipPath) {
+      throw new NotFoundError('Package bundle not found for this job');
+    }
+
+    res.redirect(zipPath);
+  } catch (err) {
+    next(err);
+  }
+});
+
+

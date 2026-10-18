@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Header } from '../components/layout/header';
@@ -57,7 +57,12 @@ export default function DashboardPage() {
     }
   };
 
-  const loadProjects = useCallback(async () => {
+  const projectsRef = useRef(projects);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
+  const loadProjects = useCallback(async (showSpinner = false) => {
     const storedToken = token || (typeof window !== 'undefined' ? localStorage.getItem('dte_token') : null);
     if (!storedToken) {
       setProjects([]);
@@ -65,7 +70,7 @@ export default function DashboardPage() {
       return;
     }
 
-    setLoading(true);
+    if (showSpinner) setLoading(true);
     try {
       const res = await api.projects.list();
       if (res) {
@@ -74,13 +79,36 @@ export default function DashboardPage() {
     } catch {
       setProjects([]);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [token]);
 
   useEffect(() => {
-    loadProjects();
+    loadProjects(true);
   }, [loadProjects, isAuthenticated]);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const storedToken = token || (typeof window !== 'undefined' ? localStorage.getItem('dte_token') : null);
+      if (!storedToken) return;
+
+      const hasRunning = projectsRef.current.some((p) => {
+        const status = p.conversionJobs?.[0]?.status;
+        return status && !['preview_ready', 'failed', 'published'].includes(status);
+      });
+
+      if (!hasRunning) return;
+
+      try {
+        const res = await api.projects.list();
+        if (res) setProjects(res);
+      } catch {
+        // silent background poll
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [token]);
 
   const handleQuickDevLogin = async () => {
     setQuickLoginLoading(true);

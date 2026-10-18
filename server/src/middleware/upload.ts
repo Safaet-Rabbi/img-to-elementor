@@ -6,8 +6,8 @@ import sharp from 'sharp';
 import { env } from '../config/index.js';
 import { ValidationError } from '../lib/errors.js';
 
-const ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg']);
-const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg']);
+const ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const ALLOWED_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
 // Use memory storage for intake, in-memory validation, and magic byte checking
 const storage = multer.memoryStorage();
@@ -23,7 +23,7 @@ export const uploadMiddleware = multer({
     if (!ALLOWED_EXTENSIONS.has(ext)) {
       return cb(
         new ValidationError(
-          `Invalid file extension '${ext}'. Only .png, .jpg, and .jpeg are supported.`
+          `Invalid file extension '${ext}'. Only .png, .jpg, .jpeg, and .webp are supported.`
         )
       );
     }
@@ -31,7 +31,7 @@ export const uploadMiddleware = multer({
     if (!ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase())) {
       return cb(
         new ValidationError(
-          `Invalid MIME type '${file.mimetype}'. Only image/png and image/jpeg are supported.`
+          `Invalid MIME type '${file.mimetype}'. Only image/png, image/jpeg, and image/webp are supported.`
         )
       );
     }

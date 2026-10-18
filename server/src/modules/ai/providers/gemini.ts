@@ -52,6 +52,13 @@ interface GeminiCandidate {
 
 interface GeminiGenerateContentResponse {
   candidates?: GeminiCandidate[];
+  promptFeedback?: {
+    blockReason?: string;
+    safetyRatings?: Array<{
+      category: string;
+      probability: string;
+    }>;
+  };
   usageMetadata?: {
     promptTokenCount?: number;
     candidatesTokenCount?: number;
@@ -82,7 +89,7 @@ export class GeminiAdapter implements AIProviderAdapter {
       env.GEMINI_MODEL ||
       process.env.GEMINI_MODEL ||
       'gemini-3.8-flash';
-    this.defaultTimeoutMs = options.defaultTimeoutMs || 60000;
+    this.defaultTimeoutMs = options.defaultTimeoutMs || 120000;
   }
 
   getCapabilities(): AICapability[] {
@@ -208,7 +215,11 @@ export class GeminiAdapter implements AIProviderAdapter {
           const buf = await fs.promises.readFile(resolved);
           const ext = path.extname(resolved).toLowerCase();
           const mimeType =
-            ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+            ext === '.jpg' || ext === '.jpeg'
+              ? 'image/jpeg'
+              : ext === '.webp'
+              ? 'image/webp'
+              : 'image/png';
           return {
             mimeType,
             data: buf.toString('base64'),
@@ -326,9 +337,18 @@ export class GeminiAdapter implements AIProviderAdapter {
       generationConfig.responseMimeType = 'application/json';
     }
 
+    const safetySettings = [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
+    ];
+
     const requestPayload: Record<string, unknown> = {
       contents,
       generationConfig,
+      safetySettings,
     };
 
     if (systemInstruction) {
@@ -496,7 +516,33 @@ export class GeminiAdapter implements AIProviderAdapter {
         );
       }
 
+      if (data.promptFeedback?.blockReason) {
+        logger.warn(
+          { blockReason: data.promptFeedback.blockReason, safetyRatings: data.promptFeedback.safetyRatings },
+          'Gemini prompt was blocked by safety filters'
+        );
+        throw new AIProviderError(
+          `Gemini prompt blocked by content filters: ${data.promptFeedback.blockReason}`,
+          this.name,
+          false,
+          { blockReason: data.promptFeedback.blockReason, details: data.promptFeedback }
+        );
+      }
+
       const candidate = data.candidates?.[0];
+      if (candidate?.finishReason === 'SAFETY') {
+        logger.warn(
+          { safetyRatings: candidate.safetyRatings },
+          'Gemini response candidate was blocked by safety filters'
+        );
+        throw new AIProviderError(
+          'Gemini response candidate blocked by content safety filters',
+          this.name,
+          false,
+          { finishReason: 'SAFETY', details: candidate.safetyRatings }
+        );
+      }
+
       const parts = candidate?.content?.parts || [];
       const content = parts.map((p) => p.text || '').join('');
 

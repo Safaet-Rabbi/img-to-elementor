@@ -100,9 +100,13 @@ export default function UploadPage() {
 
     setIsSubmitting(true);
     try {
-      await api.upload.uploadImage(selectedFile, projectName);
+      const res = await api.upload.uploadImage(selectedFile, projectName);
       toast.success('Design uploaded successfully! Conversion pipeline queued.');
-      router.push('/');
+      if (res?.project?.id) {
+        router.push(`/projects/${res.project.id}`);
+      } else {
+        router.push('/');
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.error?.message || err.message || 'Upload failed');
     } finally {

@@ -20,12 +20,12 @@ export const MAX_PIXELS_LIMIT = 100_000_000; // 100 MP
 /**
  * Supported MIME types for uploaded design screenshots.
  */
-export const SUPPORTED_MIME_TYPES = ['image/png', 'image/jpeg'] as const;
+export const SUPPORTED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
 
 /**
  * Inspect magic bytes directly from buffer to ensure the payload is authentic.
  */
-export function checkMagicBytes(buffer: Buffer): 'image/png' | 'image/jpeg' | null {
+export function checkMagicBytes(buffer: Buffer): 'image/png' | 'image/jpeg' | 'image/webp' | null {
   if (buffer.length >= 8) {
     // PNG signature: 89 50 4E 47 0D 0A 1A 0A
     if (
@@ -46,6 +46,22 @@ export function checkMagicBytes(buffer: Buffer): 'image/png' | 'image/jpeg' | nu
     // JPEG signature: FF D8 FF
     if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
       return 'image/jpeg';
+    }
+  }
+
+  if (buffer.length >= 12) {
+    // WebP signature: RIFF (bytes 0..3) ... WEBP (bytes 8..11)
+    if (
+      buffer[0] === 0x52 && // 'R'
+      buffer[1] === 0x49 && // 'I'
+      buffer[2] === 0x46 && // 'F'
+      buffer[3] === 0x46 && // 'F'
+      buffer[8] === 0x57 && // 'W'
+      buffer[9] === 0x45 && // 'E'
+      buffer[10] === 0x42 && // 'B'
+      buffer[11] === 0x50 // 'P'
+    ) {
+      return 'image/webp';
     }
   }
 

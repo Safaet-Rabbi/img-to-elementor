@@ -167,6 +167,8 @@ export class MCPPublisher {
     req: PublishRequest,
     elements: any[]
   ): Promise<{ id: number | string; url: string } | null> {
+    const baseSiteUrl = config.siteUrl.replace(/\/+$/, '');
+    const isTemplate = (req.publishMode as any) === 'template';
     const endpoint = `${baseSiteUrl}/wp-json/wp/v2/pages`;
 
     const authHeader = `Basic ${Buffer.from(`${config.credentials.username}:${config.credentials.applicationPassword}`).toString('base64')}`;

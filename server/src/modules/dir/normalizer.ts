@@ -28,6 +28,41 @@ const VALID_STYLE_KEYS = new Set([
   'flexDirection', 'justifyContent', 'alignItems', 'alignSelf', 'flexGrow', 'flexShrink', 'flexBasis', 'flexWrap'
 ]);
 
+const COMMON_NODE_KEYS = new Set([
+  'id', 'kind', 'label', 'confidence', 'styles', 'responsiveOverrides',
+  'typography', 'form_details', 'composite_graphic_asset', 'layout_tree'
+]);
+
+const KIND_ALLOWED_KEYS: Record<string, Set<string>> = {
+  container: new Set(['direction', 'wrap', 'gap', 'children']),
+  'flex-group': new Set(['direction', 'justifyContent', 'alignItems', 'wrap', 'gap', 'children']),
+  'grid-group': new Set(['columns', 'rows', 'gap', 'children']),
+  heading: new Set(['text', 'level', 'htmlTag']),
+  text: new Set(['html', 'text']),
+  button: new Set(['text', 'url', 'variant', 'size', 'icon', 'iconPosition']),
+  image: new Set(['assetId', 'alt', 'caption', 'objectFit', 'aspectRatio', 'url', 'width', 'height', 'seed', 'prompt']),
+  icon: new Set(['iconName', 'iconLibrary']),
+  'icon-text': new Set(['iconName', 'iconLibrary', 'text', 'title', 'subtext', 'iconPosition', 'url']),
+  link: new Set(['text', 'url']),
+  list: new Set(['ordered', 'children']),
+  'list-item': new Set(['text', 'icon']),
+  divider: new Set(['thickness']),
+  spacer: new Set(['height']),
+  card: new Set(['children']),
+  form: new Set(['children', 'action', 'method']),
+  input: new Set(['inputType', 'placeholder', 'label']),
+  video: new Set(['url', 'provider']),
+  map: new Set(['location']),
+  'social-icons': new Set(['platforms']),
+  counter: new Set(['value', 'prefix', 'suffix', 'title', 'duration']),
+  'progress-bar': new Set(['value', 'max', 'label']),
+  tabs: new Set(['tabs']),
+  accordion: new Set(['items']),
+  rating: new Set(['rating', 'maxRating', 'icon']),
+  badge: new Set(['text', 'icon']),
+  unknown: new Set(['originalKind', 'fallbackText']),
+};
+
 /**
  * Safely parses an unambiguous numeric string (e.g. "24", "24px", 24).
  * Returns undefined for ambiguous values like "1.5rem", "auto", "inherit".
@@ -46,6 +81,40 @@ export function parseNumeric(val: unknown): number | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Safely extracts human-readable text from a node or its children.
+ */
+export function extractNodeText(n: any): string {
+  if (!n) return '';
+  if (typeof n.text === 'string' && n.text.trim()) return n.text.trim();
+  if (typeof n.html === 'string' && n.html.trim()) return n.html.replace(/<[^>]*>/g, '').trim();
+  if (typeof n.label === 'string' && n.label.trim()) return n.label.trim();
+  if (typeof n.title === 'string' && n.title.trim()) return n.title.trim();
+  if (typeof n.content === 'string' && n.content.trim()) return n.content.trim();
+  if (Array.isArray(n.children)) {
+    for (const child of n.children) {
+      const childText = extractNodeText(child);
+      if (childText) return childText;
+    }
+  }
+  return '';
+}
+
+/**
+ * Derives a clean label from a semantic node ID when text was omitted by the AI model.
+ */
+export function deriveTextFromId(id: string): string {
+  if (!id || typeof id !== 'string') return '';
+  const cleaned = id
+    .replace(/^(?:nav_link_|link_|nav_|header_link_|footer_link_|menu_link_|btn_|button_)/i, '')
+    .replace(/(?:_link|_btn|_button|_item)$/i, '');
+  if (!cleaned || /^[0-9a-f_-]+$/i.test(cleaned) || cleaned.length < 2) return '';
+  return cleaned
+    .split(/[_-]+/)
+    .map((w) => (w.toUpperCase() === 'FAQ' ? 'FAQ' : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()))
+    .join(' ');
 }
 
 /**
@@ -175,11 +244,9 @@ export function normalizeStyles(rawStyles: unknown): Record<string, any> {
     }
   }
 
-  // 9. Remove unrecognized CSS keys that violate dirStyles.strict()
-  // Specific common CSS keys that models inject into styles:
-  const strippedCssKeys = ['top', 'right', 'bottom', 'left', 'gridTemplateColumns', 'objectFit', 'float', 'clear'];
-  for (const key of strippedCssKeys) {
-    if (s[key] !== undefined && !VALID_STYLE_KEYS.has(key)) {
+  // 9. Remove all unrecognized CSS keys that violate dirStyles.strict()
+  for (const key of Object.keys(s)) {
+    if (!VALID_STYLE_KEYS.has(key)) {
       delete s[key];
     }
   }
@@ -257,8 +324,10 @@ export function normalizeNode(rawNode: unknown): any {
     if (!node.html && node.text) {
       node.html = `<p>${escapeHtml(String(node.text))}</p>`;
     } else if (!node.html) {
-      node.html = '<p></p>';
+      const extracted = extractNodeText(node) || deriveTextFromId(node.id);
+      node.html = extracted ? `<p>${escapeHtml(extracted)}</p>` : '<p></p>';
     }
+    delete node.children;
   }
 
   // 4. Heading: level
@@ -289,7 +358,85 @@ export function normalizeNode(rawNode: unknown): any {
     node.responsiveOverrides = normOverrides;
   }
 
-  // Normalize children recursively
+  // 5. Semantic field repair and alias normalization for all node kinds
+  if (node.kind === 'heading') {
+    if (!node.text) {
+      node.text = extractNodeText(node) || deriveTextFromId(node.id) || 'Heading';
+    }
+    delete node.children;
+  } else if (node.kind === 'button') {
+    if (!node.text) {
+      node.text = extractNodeText(node) || deriveTextFromId(node.id) || 'Button';
+    }
+    delete node.children;
+    if (node.href && !node.url) {
+      node.url = node.href;
+    }
+  } else if (node.kind === 'link') {
+    if (!node.text) {
+      node.text = extractNodeText(node) || deriveTextFromId(node.id) || 'Link';
+    }
+    delete node.children;
+    if (node.href && !node.url) {
+      node.url = node.href;
+    }
+  } else if (node.kind === 'badge') {
+    if (!node.text) {
+      node.text = extractNodeText(node) || deriveTextFromId(node.id) || 'Badge';
+    }
+    delete node.children;
+  } else if (node.kind === 'list-item') {
+    if (!node.text) {
+      node.text = extractNodeText(node) || deriveTextFromId(node.id) || 'Item';
+    }
+    delete node.children;
+  } else if (node.kind === 'icon-text') {
+    if (!node.text) {
+      node.text = extractNodeText(node) || deriveTextFromId(node.id) || 'Feature';
+    }
+    delete node.children;
+  } else if (node.kind === 'spacer') {
+    if (typeof node.height !== 'number') {
+      node.height = parseNumeric(rawStyles.height) ?? 20;
+    }
+    delete node.children;
+  } else if (node.kind === 'input') {
+    if (node.inputType && !['text', 'email', 'password', 'textarea', 'select', 'checkbox', 'radio'].includes(node.inputType)) {
+      node.inputType = 'text';
+    }
+    delete node.children;
+  } else if (node.kind === 'counter') {
+    if (typeof node.value !== 'number') {
+      node.value = parseNumeric(node.value) ?? 0;
+    }
+    delete node.children;
+  } else if (node.kind === 'rating') {
+    if (typeof node.value !== 'number') {
+      node.value = parseNumeric(node.value) ?? 5;
+    }
+    delete node.children;
+  } else if (node.kind === 'progress-bar') {
+    if (typeof node.value !== 'number') {
+      node.value = parseNumeric(node.value) ?? 50;
+    }
+    delete node.children;
+  } else if (node.kind === 'flex-group') {
+    if (!node.direction || !['row', 'column'].includes(node.direction)) {
+      node.direction = rawStyles.flexDirection === 'row' ? 'row' : 'column';
+    }
+  }
+
+  // 6. Prune unrecognized keys from node to strictly satisfy dirNodeSchema
+  const allowedKeys = KIND_ALLOWED_KEYS[node.kind];
+  if (allowedKeys) {
+    for (const key of Object.keys(node)) {
+      if (!COMMON_NODE_KEYS.has(key) && !allowedKeys.has(key)) {
+        delete node[key];
+      }
+    }
+  }
+
+  // 7. Normalize children recursively
   if (Array.isArray(node.children)) {
     node.children = node.children.map(normalizeNode);
   } else if (['container', 'flex-group', 'grid-group', 'card', 'form'].includes(node.kind)) {
@@ -335,6 +482,16 @@ export function normalizeSection(rawSection: unknown): any {
     sec.children = sec.children.map(normalizeNode);
   } else {
     sec.children = [];
+  }
+
+  const ALLOWED_SECTION_KEYS = new Set([
+    'id', 'role', 'label', 'confidence', 'styles', 'children',
+    'responsiveNotes', 'responsiveOverrides', 'canvas_bounds'
+  ]);
+  for (const key of Object.keys(sec)) {
+    if (!ALLOWED_SECTION_KEYS.has(key)) {
+      delete sec[key];
+    }
   }
 
   return sec;

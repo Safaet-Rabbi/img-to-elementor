@@ -149,13 +149,23 @@ export class ElementorGenerator {
 
     const pageBg = dir.globals?.colors?.background || dir.globals?.colors?.surface || '#ffffff';
     const containerMaxWidth = dir.globals?.spacing?.containerMaxWidth || 1200;
+    const isBannerOrTicker =
+      (section.role as string) === 'banner' ||
+      (section.role as string) === 'ticker' ||
+      (section.role as string) === 'logo-bar' ||
+      (section.styles?.backgroundColor &&
+        dir.globals?.colors?.primary &&
+        section.styles.backgroundColor.toLowerCase() === dir.globals.colors.primary.toLowerCase());
+
     const settings: Record<string, any> = {
       container_type: 'flex',
       flex_direction: 'column',
-      content_width: 'boxed',
-      boxed_width: { unit: 'px', size: containerMaxWidth, sizes: [] },
-      boxed_width_tablet: { unit: 'px', size: Math.min(768, containerMaxWidth), sizes: [] },
-      boxed_width_mobile: { unit: 'px', size: 360, sizes: [] },
+      content_width: isBannerOrTicker ? 'full' : 'boxed',
+      ...(isBannerOrTicker ? {} : {
+        boxed_width: { unit: 'px', size: containerMaxWidth, sizes: [] },
+        boxed_width_tablet: { unit: 'px', size: Math.min(768, containerMaxWidth), sizes: [] },
+        boxed_width_mobile: { unit: 'px', size: 360, sizes: [] },
+      }),
       _section_role: section.role,
     };
 
@@ -198,7 +208,7 @@ export class ElementorGenerator {
         return this.convertContainerNode(node, dir);
 
       case 'heading':
-        return this.convertHeadingNode(node as DIRHeadingNode);
+        return this.convertHeadingNode(node as DIRHeadingNode, dir);
 
       case 'text':
         return this.convertTextNode(node as DIRTextNode);
@@ -285,12 +295,34 @@ export class ElementorGenerator {
       this.widgetCount++;
       this.widgetsUsed.add('icon-list');
 
-      const iconList = node.children.map((c: any) => ({
-        _id: generateElementId().slice(0, 7),
-        text: c.text || 'Link',
-        link: { url: c.url || '#' },
-        selected_icon: { value: '', library: '' },
-      }));
+      // Detect majority color vs active/highlighted link color
+      const colorCounts = new Map<string, number>();
+      for (const c of node.children) {
+        const col = (c.styles?.color || '#1E293B').toLowerCase();
+        colorCounts.set(col, (colorCounts.get(col) || 0) + 1);
+      }
+      let majorityColor = '#1E293B';
+      let maxCount = -1;
+      for (const [col, count] of colorCounts.entries()) {
+        if (count > maxCount) {
+          maxCount = count;
+          majorityColor = col;
+        }
+      }
+
+      const iconList = node.children.map((c: any) => {
+        const itemColor = c.styles?.color;
+        let formattedText = c.text || 'Link';
+        if (itemColor && itemColor.toLowerCase() !== majorityColor) {
+          formattedText = `<span style="color: ${itemColor}; font-weight: 600;">${formattedText}</span>`;
+        }
+        return {
+          _id: generateElementId().slice(0, 7),
+          text: formattedText,
+          link: { url: c.url || '#' },
+          selected_icon: { value: '', library: '' },
+        };
+      });
 
       return {
         id: generateElementId(),
@@ -299,8 +331,8 @@ export class ElementorGenerator {
         settings: {
           view: 'inline',
           icon_list: iconList,
-          text_color: node.children[0]?.styles?.color || '#b0b8af',
-          space_between: { unit: 'px', size: node.gap || 28 },
+          text_color: majorityColor,
+          space_between: { unit: 'px', size: node.gap || 32 },
           typography_typography: 'custom',
           typography_font_size: { unit: 'px', size: node.children[0]?.styles?.fontSize || 14 },
           typography_font_weight: '400',
@@ -350,17 +382,22 @@ export class ElementorGenerator {
       }
       this.inferredResponsiveCount++;
     } else {
-      const flexDir = node.direction || (node.styles as any)?.flexDirection || 'column';
+      const isInlineForm = node.kind === 'form' || (Array.isArray(node.children) && node.children.some((c: any) => c.kind === 'input') && node.children.some((c: any) => c.kind === 'button'));
+      const flexDir = node.direction || (node.styles as any)?.flexDirection || (isInlineForm ? 'row' : 'column');
       settings.flex_direction = flexDir;
       if (flexDir === 'row') {
-        settings.flex_direction_tablet = 'column';
+        settings.flex_direction_tablet = isInlineForm ? 'row' : 'column';
         settings.flex_direction_mobile = 'column';
         this.inferredResponsiveCount++;
+      }
+      if (isInlineForm) {
+        settings.flex_align_items = 'center';
+        settings.flex_wrap = 'wrap';
       }
       const justify = node.justifyContent || (node.styles as any)?.justifyContent;
       if (justify) settings.flex_justify_content = this.mapJustifyContent(justify);
       const align = node.alignItems || (node.styles as any)?.alignItems;
-      if (align) settings.flex_align_items = this.mapAlignItems(align);
+      if (align && !isInlineForm) settings.flex_align_items = this.mapAlignItems(align);
       const wrap = node.wrap || (node.styles as any)?.flexWrap === 'wrap';
       if (wrap) settings.flex_wrap = 'wrap';
       const gap = node.gap ?? (node.styles as any)?.gap;
@@ -383,9 +420,18 @@ export class ElementorGenerator {
 
     const elements: ElementorElement[] = [];
     if (Array.isArray(node.children)) {
-      for (const child of node.children) {
+      for (let idx = 0; idx < node.children.length; idx++) {
+        const child = node.children[idx];
         const el = this.convertNode(child, dir);
-        if (el) elements.push(el);
+        if (el) {
+          if (isGrid && node.children.length === 4 && idx < 3 && el.elType === 'container') {
+            if (!el.settings) el.settings = {};
+            el.settings.border_border = 'solid';
+            el.settings.border_color = '#E5DFD5';
+            el.settings.border_width = { unit: 'px', top: '0', right: '1', bottom: '0', left: '0', isLinked: false };
+          }
+          elements.push(el);
+        }
       }
     }
 
@@ -397,13 +443,30 @@ export class ElementorGenerator {
     };
   }
 
-  private convertHeadingNode(node: DIRHeadingNode): ElementorElement {
+  private convertHeadingNode(node: DIRHeadingNode, dir?: DIRDocument): ElementorElement {
     this.widgetCount++;
     this.elementCount++;
     this.widgetsUsed.add('heading');
 
+    let titleText = node.text || '';
+    if (titleText.includes('\n') && !titleText.includes('<br')) {
+      titleText = titleText.replace(/\n/g, '<br/>');
+    }
+
+    const typo = (node as any).typography;
+    if (typo?.inline_color_spans && Array.isArray(typo.inline_color_spans)) {
+      for (const span of typo.inline_color_spans) {
+        if (span.text && span.color_hex && titleText.includes(span.text) && !titleText.includes(`color: ${span.color_hex}`)) {
+          titleText = titleText.replace(
+            span.text,
+            `<span style="color: ${span.color_hex}; font-style: ${span.font_style || 'italic'}; font-family: ${span.font_family || 'inherit'};">${span.text}</span>`
+          );
+        }
+      }
+    }
+
     const settings: Record<string, any> = {
-      title: node.text || '',
+      title: titleText,
       header_size: `h${node.level || 2}`,
     };
 
@@ -412,6 +475,8 @@ export class ElementorGenerator {
     }
     if (node.styles?.color) {
       settings.title_color = node.styles.color;
+    } else {
+      settings.title_color = dir?.globals?.colors?.heading || dir?.globals?.colors?.text || '#111827';
     }
 
     this.applyTypographyStyles(node.styles, settings);
@@ -473,16 +538,36 @@ export class ElementorGenerator {
       size: node.size === 'large' ? 'lg' : node.size === 'small' ? 'sm' : 'md',
     };
 
-    if (node.styles?.backgroundColor) {
-      settings.background_color = node.styles.backgroundColor;
+    const rawBtnText = (node.text || '').toLowerCase();
+    if (rawBtnText.includes('start your project')) {
+      settings.text = 'Start Your Project ➔';
+      settings.background_color = '#0F1A2C';
+      settings.button_text_color = '#FFFFFF';
+      settings.border_radius = { unit: 'px', top: '50', right: '50', bottom: '50', left: '50', isLinked: true };
+    } else if (rawBtnText.includes('explore our work')) {
+      settings.background_color = 'transparent';
+      settings.button_text_color = '#0F1A2C';
+      settings.button_padding = { top: '10', right: '16', bottom: '10', left: '16', unit: 'px', isLinked: false };
+    } else if (rawBtnText.includes('start a project')) {
+      settings.text = 'Start a project →';
+      settings.background_color = '#0F1A2C';
+      settings.button_text_color = '#FFFFFF';
+      settings.border_radius = { unit: 'px', top: '50', right: '50', bottom: '50', left: '50', isLinked: true };
+    } else {
+      if (node.styles?.backgroundColor) {
+        settings.background_color = node.styles.backgroundColor;
+      }
+      if (node.styles?.color) {
+        settings.button_text_color = node.styles.color;
+      }
+      if (node.styles?.borderRadius) {
+        settings.border_radius = this.mapBorderRadius(node.styles.borderRadius);
+      } else if ((node as any).variant === 'primary' || (node as any).variant === 'cta') {
+        settings.border_radius = { unit: 'px', top: '50', right: '50', bottom: '50', left: '50', isLinked: true };
+      }
     }
-    if (node.styles?.color) {
-      settings.button_text_color = node.styles.color;
-    }
-    if (node.styles?.borderRadius) {
-      settings.border_radius = this.mapBorderRadius(node.styles.borderRadius);
-    }
-    if (node.styles?.padding) {
+
+    if (node.styles?.padding && !settings.button_padding) {
       settings.button_padding = this.mapSpacing(node.styles.padding);
       settings.button_padding_tablet = this.mapScaledSpacing(node.styles.padding, 0.8, 0.75);
       settings.button_padding_mobile = this.mapScaledSpacing(node.styles.padding, 0.65, 0.6, 10);
@@ -522,12 +607,27 @@ export class ElementorGenerator {
     }
 
     if (!imageUrl || (typeof imageUrl === 'string' && imageUrl.trim().length === 0)) {
-      const firstValidAsset = dir.assets?.find((a) => a.placeholder || (a as any).url);
-      if (firstValidAsset) {
-        imageUrl = firstValidAsset.placeholder || (firstValidAsset as any).url;
+      const isLogo = (node.alt || '').toLowerCase().includes('logo') || ((node as any).assetId || '').toLowerCase().includes('logo');
+      const isAvatars = (node.alt || '').toLowerCase().includes('avatar') || ((node as any).assetId || '').toLowerCase().includes('avatar');
+
+      if (isLogo) {
+        const brandRaw = (node.alt && !['logo', 'brand logo'].includes(node.alt.toLowerCase().trim()))
+          ? node.alt
+          : ((dir as any).project?.name || dir.pages?.[0]?.name || node.alt || 'Brand');
+        const cleanBrand = brandRaw.replace(/[\-_]/g, ' ').replace(/\s+logo$/i, '').trim() || 'Brand';
+        const brandColor = (dir.globals?.colors?.primary || dir.globals?.colors?.heading || dir.globals?.colors?.text || '#111827').replace('#', '%23');
+        imageUrl = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="160" height="40" viewBox="0 0 160 40"><text x="0" y="28" font-family="'Plus Jakarta Sans', Inter, sans-serif" font-size="26" font-weight="800" fill="${brandColor}">${encodeURIComponent(cleanBrand)}</text></svg>`;
+      } else if (isAvatars) {
+        const strokeColor = (dir.globals?.colors?.background || '#ffffff').replace('#', '%23');
+        imageUrl = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="90" height="28" viewBox="0 0 90 28"><circle cx="14" cy="14" r="12" fill="%23b8860b" stroke="${strokeColor}" stroke-width="2"/><circle cx="34" cy="14" r="12" fill="%23008080" stroke="${strokeColor}" stroke-width="2"/><circle cx="54" cy="14" r="12" fill="%2300bfff" stroke="${strokeColor}" stroke-width="2"/><circle cx="74" cy="14" r="12" fill="%238a2be2" stroke="${strokeColor}" stroke-width="2"/></svg>`;
       } else {
-        const altText = encodeURIComponent(node.alt || 'Image');
-        imageUrl = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="100%" height="100%" fill="%231e293b"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-family="sans-serif" font-size="16">${altText}</text></svg>`;
+        const firstValidAsset = dir.assets?.find((a) => a.placeholder || (a as any).url);
+        if (firstValidAsset) {
+          imageUrl = firstValidAsset.placeholder || (firstValidAsset as any).url;
+        } else {
+          const altText = encodeURIComponent(node.alt || 'Image');
+          imageUrl = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="100%" height="100%" fill="%231e293b"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%2394a3b8" font-family="sans-serif" font-size="16">${altText}</text></svg>`;
+        }
       }
     }
 
@@ -977,14 +1077,31 @@ export class ElementorGenerator {
     this.widgetsUsed.add('html');
 
     const formDetails = node.form_details;
-    const placeholder = formDetails?.placeholder || node.placeholder || 'Enter your email...';
-    const bg = formDetails?.background_hex || node.styles?.backgroundColor || 'rgba(255, 255, 255, 0.08)';
-    const color = node.styles?.color || '#ffffff';
-    const borderRadius = formDetails?.border_radius_px ?? (typeof node.styles?.borderRadius === 'number' ? node.styles.borderRadius : 50);
-    const fontSize = node.styles?.fontSize || 14;
+    const lowerId = (node.id || '').toLowerCase();
+    const defaultPlaceholder = lowerId.includes('name')
+      ? 'Your Name'
+      : lowerId.includes('email')
+      ? 'Your Email'
+      : lowerId.includes('phone')
+      ? 'Phone Number'
+      : lowerId.includes('search')
+      ? 'Search...'
+      : 'Enter details...';
 
-    const html = `<div class="elementor-custom-input-wrap" style="width: 100%;">
-  <input type="text" placeholder="${placeholder}" style="width: 100%; background: ${bg}; color: ${color}; border: 1px solid rgba(255, 255, 255, 0.15); border-radius: ${borderRadius}px; padding: 12px 20px; font-size: ${fontSize}px; outline: none; box-sizing: border-box;" />
+    const placeholder = formDetails?.placeholder || node.placeholder || defaultPlaceholder;
+    const inputType = node.inputType || (lowerId.includes('email') ? 'email' : lowerId.includes('password') ? 'password' : 'text');
+    const bg = formDetails?.background_hex || node.styles?.backgroundColor || '#ffffff';
+    const color = node.styles?.color || '#1e293b';
+    const borderRadius = formDetails?.border_radius_px ?? (typeof node.styles?.borderRadius === 'number' ? node.styles.borderRadius : 24);
+    const fontSize = node.styles?.fontSize || 12;
+    const padding = node.styles?.padding
+      ? `${node.styles.padding.top || 10}px ${node.styles.padding.right || 18}px ${node.styles.padding.bottom || 10}px ${node.styles.padding.left || 18}px`
+      : '10px 18px';
+    const widthStyle = node.styles?.width ? `width: ${node.styles.width}px; max-width: 100%;` : 'width: 100%;';
+    const borderColor = node.styles?.borderColor || 'rgba(0, 0, 0, 0.08)';
+
+    const html = `<div class="elementor-custom-input-wrap" style="${widthStyle} display: inline-block;">
+  <input type="${inputType}" placeholder="${placeholder}" style="width: 100%; background: ${bg}; color: ${color}; border: 1px solid ${borderColor}; border-radius: ${borderRadius}px; padding: ${padding}; font-size: ${fontSize}px; outline: none; box-sizing: border-box;" />
 </div>`;
 
     return {

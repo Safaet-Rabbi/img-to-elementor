@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/header';
@@ -28,6 +28,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Modal } from '../../../components/ui/modal';
+import { VisualDiffViewer } from '../../../components/conversion/visual-diff-viewer';
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -39,9 +40,14 @@ export default function ProjectDetailPage() {
   const [dirData, setDirData] = useState<any>(null);
   const [elementorData, setElementorData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'status' | 'dir' | 'elementor'>('status');
+  const [activeTab, setActiveTab] = useState<'status' | 'preview' | 'dir' | 'elementor'>('status');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const jobRef = useRef(job);
+  const elementorDataRef = useRef(elementorData);
+  useEffect(() => { jobRef.current = job; }, [job]);
+  useEffect(() => { elementorDataRef.current = elementorData; }, [elementorData]);
 
   const handleDeleteProject = async () => {
     setDeleting(true);
@@ -76,14 +82,57 @@ export default function ProjectDetailPage() {
   };
 
   useEffect(() => {
-    fetchProjectData();
-    const interval = setInterval(() => {
-      if (job && !['preview_ready', 'failed', 'published'].includes(job.status)) {
-        fetchProjectData();
+    let isMounted = true;
+    const fetchFresh = async () => {
+      try {
+        const res = await api.projects.get(projectId);
+        if (!isMounted || !res) return;
+        const latestJob = (res as any).conversionJobs?.[0];
+        const prevJob = jobRef.current;
+        const prevStagesLength = prevJob?.stages?.length || 0;
+        const latestStagesLength = latestJob?.stages?.length || 0;
+        const hasJobChanged =
+          !prevJob ||
+          prevJob.id !== latestJob?.id ||
+          prevJob.status !== latestJob?.status ||
+          prevJob.currentStage !== latestJob?.currentStage ||
+          prevStagesLength !== latestStagesLength ||
+          Boolean(prevJob.elementorArtifact) !== Boolean(latestJob?.elementorArtifact) ||
+          Boolean(prevJob.dirArtifact) !== Boolean(latestJob?.dirArtifact) ||
+          Boolean(prevJob.previewArtifact) !== Boolean(latestJob?.previewArtifact);
+
+        if (hasJobChanged) {
+          setProject(res);
+          if (latestJob) {
+            setJob(latestJob);
+            setDirData(latestJob.dirArtifact || null);
+            setElementorData(latestJob.elementorArtifact || null);
+          }
+        }
+      } catch {
+        // Silent catch during interval polling
+      } finally {
+        if (isMounted) setLoading(false);
       }
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [projectId, job?.status]);
+    };
+
+    fetchFresh();
+    const interval = setInterval(() => {
+      const currentJob = jobRef.current;
+      const currentElementor = elementorDataRef.current;
+      // Continue polling until job is completely finished with elementorData, or failed
+      const isComplete = (currentJob?.status === 'preview_ready' || currentJob?.status === 'published') && !!currentElementor;
+      const isFailed = currentJob?.status === 'failed';
+      if (!isComplete && !isFailed) {
+        fetchFresh();
+      }
+    }, 2000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [projectId]);
 
   const handleRetry = async () => {
     if (!job) return;
@@ -158,6 +207,20 @@ export default function ProjectDetailPage() {
             )}
             {elementorData && (
               <>
+                <a
+                  href={job?.id ? api.jobs.getPackageUrl(job.id) : '#'}
+                  download
+                  className="inline-flex"
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                    leftIcon={<Download className="w-3.5 h-3.5" />}
+                  >
+                    Download Package (.zip)
+                  </Button>
+                </a>
                 <Button
                   variant="outline"
                   size="sm"
@@ -198,6 +261,22 @@ export default function ProjectDetailPage() {
             }`}
           >
             <Activity className="w-4 h-4" /> Pipeline Progress
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('preview')}
+            className={`pb-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
+              activeTab === 'preview'
+                ? 'border-primary text-primary font-semibold'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Eye className="w-4 h-4" /> Visual Fidelity &amp; Diff
+            {job?.previewArtifact && (
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full font-medium">
+                Verified
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -294,7 +373,12 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* Tab 2: DIR Architecture */}
+        {/* Tab 2: Visual Fidelity & Diff */}
+        {activeTab === 'preview' && (
+          <VisualDiffViewer job={job} project={project} />
+        )}
+
+        {/* Tab 3: DIR Architecture */}
         {activeTab === 'dir' && dirData && <DIRInspector dirData={dirData} />}
 
         {/* Tab 3: Elementor Structure */}

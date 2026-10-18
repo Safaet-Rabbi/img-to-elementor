@@ -244,8 +244,7 @@ CRITICAL VISUAL FIDELITY & LAYOUT ACCURACY:
 - HEADLINE HIERARCHY & TEXT CONTRAST: Preserve the primary headline (e.g. "Simplify your financial\\nManagement") as an H1 heading with appropriate font size (e.g. 48-64), center or left alignment matching the design, and high-contrast color (e.g. #ffffff against dark backgrounds). Ensure all white/light text has explicit high-contrast color styles.
 - HERO GRAPHICS & PHOTOGRAPHY: If the hero area features an illustration, 3D artwork, athletic photograph, model, gym equipment, or product screenshot, define an asset in the root "assets" array with "sourceRect": { "x": <number>, "y": <number>, "width": <number>, "height": <number> } indicating its bounding box in the original image, and insert an 'image' node referencing this asset via "assetId".
 - CIRCULAR STATISTICS & METRIC BADGES: For metrics and statistics (e.g. "+70% Fitness Progress", "500+ Members", circular stat cards), structure them as a 'container' or 'flex-group' with "direction": "column", centered alignment, and children consisting of a 'counter' node ("value": <number>, "suffix": "<string>", "prefix": "<string>", "styles": { "color": "<hex>", "fontSize": <number>, "fontWeight": 700 }) and a 'text' node for the label. If the visual badge is circular, specify "borderRadius": 9999 and matching numeric "width" and "height" in "styles".
-- HIGH-IMPACT CTA BUTTONS: Prominent action buttons (e.g. orange #ff5e14 or vibrant accents) must have explicit "backgroundColor", contrasting text "color" (#ffffff), padding, and "borderRadius".
-- HIGH-IMPACT CTA BUTTONS: Prominent action buttons (e.g. orange #ff5e14 or vibrant accents) must have explicit "backgroundColor", contrasting text "color" (#ffffff), padding, and "borderRadius".
+- HIGH-IMPACT CTA BUTTONS: Prominent action buttons (e.g. primary accent colors matching the design) must have explicit "backgroundColor", contrasting text "color" (#ffffff or dark), padding, and "borderRadius".
 
 SUPPORTED SECTION ROLES:
 ${supportedSectionRoles}
@@ -258,6 +257,9 @@ NODE REQUIREMENTS:
 - For 'heading': include "text" (string) and "level" (1|2|3|4|5|6).
 - For 'text': include "html" (string with paragraph/span content) and optional "text".
 - For 'button': include "text" (string), optional "variant" ('primary'|'secondary'|'outline'|'ghost'|'link').
+- For 'link': include "text" (required visible label string e.g. "Home", "Services", "About", "Contact", "FAQ") and optional "url". Links NEVER have children.
+- For 'input': include optional "placeholder" (string e.g. "Your Name", "Enter email..."), optional "inputType" ('text'|'email'|'password'), and optional "label". Inputs NEVER have children.
+- For 'form': include "children" (array containing input and button nodes).
 - For 'container' and 'flex-group': include "direction" ('row'|'column'), optional "gap" (number), and "children" (array of nodes).
 - For 'image': include "alt" (string), optional "objectFit" ('cover'|'contain'|'fill'|'none'), optional "aspectRatio", and optional "assetId" referencing one in root "assets".
 - For 'icon' or 'icon-text': include "iconName", "text", etc.

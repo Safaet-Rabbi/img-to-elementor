@@ -317,6 +317,13 @@ export const api = {
       );
       return res.data.data;
     },
+    getValidation: async (jobId: string): Promise<Record<string, unknown>> => {
+      const res = await apiClient.get<ApiResponse<Record<string, unknown>>>(`/jobs/${jobId}/validation`);
+      return res.data.data;
+    },
+    getPackageUrl: (jobId: string): string => {
+      return `${API_BASE_URL}/api/v1/jobs/${jobId}/package`;
+    },
     retry: async (jobId: string, fromStage?: StageName): Promise<ConversionJob> => {
       const res = await apiClient.post<ApiResponse<ConversionJob>>(`/jobs/${jobId}/retry`, { fromStage });
       return res.data.data;
