@@ -88,25 +88,30 @@ export default function ProjectDetailPage() {
         const res = await api.projects.get(projectId);
         if (!isMounted || !res) return;
         const latestJob = (res as any).conversionJobs?.[0];
-        const prevJob = jobRef.current;
-        const prevStagesLength = prevJob?.stages?.length || 0;
-        const latestStagesLength = latestJob?.stages?.length || 0;
-        const hasJobChanged =
-          !prevJob ||
-          prevJob.id !== latestJob?.id ||
-          prevJob.status !== latestJob?.status ||
-          prevJob.currentStage !== latestJob?.currentStage ||
-          prevStagesLength !== latestStagesLength ||
-          Boolean(prevJob.elementorArtifact) !== Boolean(latestJob?.elementorArtifact) ||
-          Boolean(prevJob.dirArtifact) !== Boolean(latestJob?.dirArtifact) ||
-          Boolean(prevJob.previewArtifact) !== Boolean(latestJob?.previewArtifact);
+        setProject(res);
 
-        if (hasJobChanged) {
-          setProject(res);
-          if (latestJob) {
-            setJob(latestJob);
-            setDirData(latestJob.dirArtifact || null);
-            setElementorData(latestJob.elementorArtifact || null);
+        if (latestJob) {
+          setJob(latestJob);
+
+          let elemData = latestJob.elementorArtifact || null;
+          const dData = latestJob.dirArtifact || null;
+
+          if (dData) setDirData(dData);
+
+          // If job is finished or in validating phase, and elementorArtifact is not in project payload, fetch eagerly
+          if (!elemData && latestJob.id && (latestJob.status === 'preview_ready' || latestJob.status === 'validating_elementor')) {
+            try {
+              const fetchedElem = await api.jobs.getElementor(latestJob.id);
+              if (fetchedElem && isMounted) {
+                elemData = fetchedElem;
+              }
+            } catch {
+              // Eager fetch silent fallback
+            }
+          }
+
+          if (elemData) {
+            setElementorData(elemData);
           }
         }
       } catch {
@@ -169,6 +174,7 @@ export default function ProjectDetailPage() {
 
   const isReady = job?.status === 'preview_ready' || job?.status === 'published';
   const isFailed = job?.status === 'failed';
+  const hasElementor = !!elementorData || !!job?.elementorArtifact;
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
@@ -205,7 +211,7 @@ export default function ProjectDetailPage() {
                 <RefreshCw className="w-3.5 h-3.5" /> Retry Failed Stage
               </Button>
             )}
-            {elementorData && (
+            {hasElementor && (
               <>
                 <a
                   href={job?.id ? api.jobs.getPackageUrl(job.id) : '#'}
@@ -224,7 +230,7 @@ export default function ProjectDetailPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => downloadJson(elementorData, `${project.name || 'project'}-elementor-page.json`)}
+                  onClick={() => downloadJson(elementorData || job?.elementorArtifact, `${project.name || 'project'}-elementor-page.json`)}
                   className="flex items-center gap-1.5"
                   leftIcon={<Download className="w-3.5 h-3.5" />}
                 >
@@ -298,17 +304,17 @@ export default function ProjectDetailPage() {
           <button
             type="button"
             onClick={() => setActiveTab('elementor')}
-            disabled={!elementorData}
+            disabled={!hasElementor}
             className={`pb-3 border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
               activeTab === 'elementor'
                 ? 'border-primary text-primary font-semibold'
-                : !elementorData
+                : !hasElementor
                 ? 'border-transparent text-muted-foreground/40 cursor-not-allowed'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
             <Layers className="w-4 h-4" /> Elementor Canvas Page Structure
-            {elementorData && (
+            {hasElementor && (
               <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded-full font-medium">
                 Page Ready
               </span>

@@ -430,10 +430,11 @@ export class ElementorGenerator {
         const child = node.children[idx];
         const el = this.convertNode(child, dir);
         if (el) {
-          if (isGrid && node.children.length === 4 && idx < 3 && el.elType === 'container') {
+          const gridBorderColor = node.styles?.borderColor || (dir.globals?.colors as any)?.border;
+          if (isGrid && node.gap === 0 && gridBorderColor && idx < node.children.length - 1 && el.elType === 'container') {
             if (!el.settings) el.settings = {};
             el.settings.border_border = 'solid';
-            el.settings.border_color = '#E5DFD5';
+            el.settings.border_color = gridBorderColor;
             el.settings.border_width = { unit: 'px', top: '0', right: '1', bottom: '0', left: '0', isLinked: false };
           }
           elements.push(el);
@@ -544,33 +545,22 @@ export class ElementorGenerator {
       size: node.size === 'large' ? 'lg' : node.size === 'small' ? 'sm' : 'md',
     };
 
-    const rawBtnText = (node.text || '').toLowerCase();
-    if (rawBtnText.includes('start your project')) {
-      settings.text = 'Start Your Project ➔';
-      settings.background_color = '#0F1A2C';
+    if (node.styles?.backgroundColor) {
+      settings.background_color = node.styles.backgroundColor;
+    } else if ((node as any).variant === 'primary' || (node as any).variant === 'cta') {
+      settings.background_color = dir.globals?.colors?.primary || '#0F1A2C';
+    }
+
+    if (node.styles?.color) {
+      settings.button_text_color = node.styles.color;
+    } else if (settings.background_color && settings.background_color !== 'transparent') {
       settings.button_text_color = '#FFFFFF';
+    }
+
+    if (node.styles?.borderRadius !== undefined) {
+      settings.border_radius = this.mapBorderRadius(node.styles.borderRadius);
+    } else if ((node as any).variant === 'primary' || (node as any).variant === 'cta') {
       settings.border_radius = { unit: 'px', top: '50', right: '50', bottom: '50', left: '50', isLinked: true };
-    } else if (rawBtnText.includes('explore our work')) {
-      settings.background_color = 'transparent';
-      settings.button_text_color = '#0F1A2C';
-      settings.button_padding = { top: '10', right: '16', bottom: '10', left: '16', unit: 'px', isLinked: false };
-    } else if (rawBtnText.includes('start a project')) {
-      settings.text = 'Start a project →';
-      settings.background_color = '#0F1A2C';
-      settings.button_text_color = '#FFFFFF';
-      settings.border_radius = { unit: 'px', top: '50', right: '50', bottom: '50', left: '50', isLinked: true };
-    } else {
-      if (node.styles?.backgroundColor) {
-        settings.background_color = node.styles.backgroundColor;
-      }
-      if (node.styles?.color) {
-        settings.button_text_color = node.styles.color;
-      }
-      if (node.styles?.borderRadius) {
-        settings.border_radius = this.mapBorderRadius(node.styles.borderRadius);
-      } else if ((node as any).variant === 'primary' || (node as any).variant === 'cta') {
-        settings.border_radius = { unit: 'px', top: '50', right: '50', bottom: '50', left: '50', isLinked: true };
-      }
     }
 
     if (node.styles?.padding && !settings.button_padding) {
@@ -1051,8 +1041,7 @@ export class ElementorGenerator {
       settings: {
         container_type: 'flex',
         flex_direction: 'row',
-        content_width: 'boxed',
-        boxed_width: { unit: 'px', size: estimatedPillWidth, sizes: [] },
+        content_width: 'full',
         width: { unit: 'px', size: estimatedPillWidth },
         align_self: 'center',
         flex_align_items: 'center',
@@ -1213,16 +1202,11 @@ export class ElementorGenerator {
 
     if (styles.width !== undefined && styles.width !== null) {
       if (typeof styles.width === 'number') {
-        if (styles.width <= 100) {
-          if (styles.width === 100) settings.content_width = 'full';
-          settings.width = { unit: '%', size: styles.width };
-        } else {
-          settings.width = { unit: 'px', size: styles.width };
-          if (styles.width > 360) {
-            settings.width_tablet = { unit: 'px', size: Math.min(680, styles.width) };
-            settings.width_mobile = { unit: '%', size: 100 };
-            this.inferredResponsiveCount++;
-          }
+        settings.width = { unit: 'px', size: styles.width };
+        if (styles.width > 360) {
+          settings.width_tablet = { unit: 'px', size: Math.min(680, styles.width) };
+          settings.width_mobile = { unit: '%', size: 100 };
+          this.inferredResponsiveCount++;
         }
       } else if (typeof styles.width === 'string') {
         const trimmed = styles.width.trim();
@@ -1244,12 +1228,7 @@ export class ElementorGenerator {
           }
         } else if (!isNaN(Number(trimmed))) {
           const val = Number(trimmed);
-          if (val <= 100) {
-            if (val === 100) settings.content_width = 'full';
-            settings.width = { unit: '%', size: val };
-          } else {
-            settings.width = { unit: 'px', size: val };
-          }
+          settings.width = { unit: 'px', size: val };
         }
       }
     }

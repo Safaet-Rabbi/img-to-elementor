@@ -145,7 +145,9 @@ export class AutoCorrector {
           const lastIndex = parts.length - 1;
           const lastLine = parts[lastIndex].trim();
           if (lastLine.length > 0 && lastLine.length < 30) {
-            parts[lastIndex] = `<span style="color: ${primaryColor}; font-style: italic; font-family: serif, 'Times New Roman', Georgia;">${lastLine}</span>`;
+            const headingFont = (dirDoc.globals?.typography as any)?.headingFont;
+            const fontAttr = headingFont ? ` font-family: ${headingFont};` : '';
+            parts[lastIndex] = `<span style="color: ${primaryColor}; font-style: italic;${fontAttr}">${lastLine}</span>`;
             modified = true;
           }
         }
@@ -170,9 +172,13 @@ export class AutoCorrector {
         c.elements?.some((w) => w.widgetType === 'counter' || w.widgetType === 'heading')
       );
       if (hasCounters && children.length >= 3 && children.length <= 6) {
-        const borderColor = (dirDoc.globals?.colors as any)?.border || '#E5DFD5';
+        const borderColor = (dirDoc.globals?.colors as any)?.border || s.border_color || '#E5DFD5';
         s.background_background = 'classic';
-        s.background_color = s.background_color || 'rgba(255, 255, 255, 0.45)';
+        if (!s.background_color || s.background_color === 'transparent') {
+          const pageBg = dirDoc.globals?.colors?.background || '#ffffff';
+          const isDark = pageBg.startsWith('#') && pageBg.length >= 7 && parseInt(pageBg.slice(1, 3), 16) < 128;
+          s.background_color = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.45)';
+        }
         s.border_border = 'solid';
         s.border_color = borderColor;
         s.border_width = { unit: 'px', top: '1', right: '1', bottom: '1', left: '1', isLinked: true };
@@ -212,6 +218,7 @@ export class AutoCorrector {
         if (child.elType === 'container') {
           child.settings = {
             ...child.settings,
+            content_width: 'full',
             flex_direction: 'row',
             flex_justify_content: 'center',
             flex_align_items: 'center',
@@ -248,26 +255,31 @@ export class AutoCorrector {
         btnText.toLowerCase().includes('explore') ||
         btnText.toLowerCase().includes('learn more');
 
-      const darkColor = dirDoc.globals?.colors?.heading || dirDoc.globals?.colors?.text || '#0F1A2C';
+      const primaryColor = dirDoc.globals?.colors?.primary || '#2563EB';
+      const headingColor = dirDoc.globals?.colors?.heading || dirDoc.globals?.colors?.text || '#1E293B';
 
-      if (isPrimary && !s.border_radius) {
+      if (isPrimary) {
         if (!s.background_color || s.background_color === 'transparent') {
-          s.background_color = darkColor;
+          s.background_color = primaryColor;
         }
-        s.button_text_color = '#FFFFFF';
-        s.border_radius = { unit: 'px', top: '50', right: '50', bottom: '50', left: '50', isLinked: true };
-        s.button_padding = { unit: 'px', top: '14', right: '28', bottom: '14', left: '28', isLinked: false };
+        if (!s.button_text_color) {
+          s.button_text_color = '#FFFFFF';
+        }
+        if (!s.border_radius) {
+          s.border_radius = { unit: 'px', top: '50', right: '50', bottom: '50', left: '50', isLinked: true };
+        }
+        s.button_padding = s.button_padding || { unit: 'px', top: '14', right: '28', bottom: '14', left: '28', isLinked: false };
         s.typography_font_size = s.typography_font_size || { unit: 'px', size: 14 };
         s.typography_font_weight = s.typography_font_weight || '600';
         corrections.push({
           elementId: el.id,
           rule: 'PRIMARY_CTA_PILL_STYLING',
-          change: 'Formatted primary CTA with rounded pill radius and balanced padding',
+          change: 'Formatted primary CTA with theme colors and balanced padding',
         });
       } else if (isSecondary) {
         if (!s.border_radius) {
           s.background_color = 'transparent';
-          s.button_text_color = darkColor;
+          s.button_text_color = s.button_text_color || headingColor;
           s.typography_font_size = s.typography_font_size || { unit: 'px', size: 14 };
           s.typography_font_weight = s.typography_font_weight || '600';
           corrections.push({

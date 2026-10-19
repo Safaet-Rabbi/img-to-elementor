@@ -211,10 +211,35 @@ ${renderedContent}
     const margin = this.resolveSpacing(s, 'margin', device);
 
     // Background & Borders
-    const fallbackBg = (opts as any).pageBg || '#ffffff';
-    const bg = s.background_color || (s.background_background === 'classic' ? fallbackBg : 'transparent');
+    let bgStyle = '';
+    if (s.background_background === 'gradient') {
+      const gradType = s.background_gradient_type || 'linear';
+      const colA = s.background_color || '#000000';
+      const colB = s.background_color_b || '#333333';
+      const stopA = s.background_color_stop?.size ?? 0;
+      const stopB = s.background_color_b_stop?.size ?? 100;
+      if (gradType === 'radial') {
+        const pos = s.background_gradient_position || 'center center';
+        bgStyle = `background: radial-gradient(circle at ${pos}, ${colA} ${stopA}%, ${colB} ${stopB}%);`;
+      } else {
+        const angle = s.background_gradient_angle?.size ?? 180;
+        bgStyle = `background: linear-gradient(${angle}deg, ${colA} ${stopA}%, ${colB} ${stopB}%);`;
+      }
+    } else {
+      const fallbackBg = (opts as any).pageBg || '#ffffff';
+      const bg = s.background_color || (s.background_background === 'classic' ? fallbackBg : 'transparent');
+      if (bg && bg !== 'transparent') {
+        bgStyle = `background-color: ${bg};`;
+      }
+    }
+
+    if (s.background_image?.url) {
+      bgStyle += ` background-image: url('${s.background_image.url}'); background-size: ${s.background_size || 'cover'}; background-position: ${s.background_position || 'center'}; background-repeat: no-repeat;`;
+    }
+
     const border = this.resolveBorder(s);
     const radius = this.resolveRadius(s);
+    const alignSelf = s.align_self ? `align-self: ${this.cssAlign(s.align_self)};` : '';
 
     // Custom Width
     let customWidth = '';
@@ -228,7 +253,8 @@ ${renderedContent}
       .join('\n');
 
     const outerStyles = [
-      `background-color: ${bg};`,
+      bgStyle,
+      alignSelf,
       padding ? `padding: ${padding};` : '',
       margin ? `margin: ${margin};` : '',
       border ? border : '',
